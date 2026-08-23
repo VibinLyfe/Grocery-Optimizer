@@ -1,0 +1,12 @@
+{
+  "name": "grocery-optimizer-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Knoxville grocery price optimizer proof of concept",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "devDependencies": {
+    "netlify-cli": "^19.0.0"
+  }
+}

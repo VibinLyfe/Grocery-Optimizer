@@ -1,0 +1,188 @@
+{
+  "meta": {
+    "market": "Knoxville, TN",
+    "note": "Prototype seed data only. Replace with live permitted retailer connectors before relying on prices.",
+    "updated_at": "2026-08-23"
+  },
+  "products": [
+    {
+      "canonical_id": "ground-beef-organic-grassfed-85-15",
+      "name": "Organic grass-fed ground beef 85/15",
+      "unit": "lb",
+      "offers": [
+        {
+          "retailer": "ALDI",
+          "product": "Organic grass-fed ground beef 85/15",
+          "package_qty": 1,
+          "package_unit": "lb",
+          "price": 5.99,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Kroger",
+          "product": "Organic grass-fed ground beef 85/15",
+          "package_qty": 1,
+          "package_unit": "lb",
+          "price": 9.49,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Kroger",
+          "product": "Organic grass-fed ground beef 85/15 - 3 lb pack",
+          "package_qty": 3,
+          "package_unit": "lb",
+          "price": 20.99,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Sprouts",
+          "product": "Organic grass-fed ground beef 85/15",
+          "package_qty": 1,
+          "package_unit": "lb",
+          "price": 8.99,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Earth Fare",
+          "product": "Organic grass-fed ground beef 85/15",
+          "package_qty": 1,
+          "package_unit": "lb",
+          "price": 12.39,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        }
+      ]
+    },
+    {
+      "canonical_id": "organic-broccoli",
+      "name": "Organic broccoli",
+      "unit": "each",
+      "offers": [
+        {
+          "retailer": "ALDI",
+          "product": "Organic broccoli",
+          "package_qty": 1,
+          "package_unit": "each",
+          "price": 3.65,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Kroger",
+          "product": "Organic broccoli",
+          "package_qty": 1,
+          "package_unit": "each",
+          "price": 3.49,
+          "match": "estimated",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Sprouts",
+          "product": "Organic broccoli bunch",
+          "package_qty": 1,
+          "package_unit": "each",
+          "price": 3.91,
+          "match": "estimated",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Earth Fare",
+          "product": "Organic broccoli",
+          "package_qty": 1,
+          "package_unit": "each",
+          "price": 4.49,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        }
+      ]
+    },
+    {
+      "canonical_id": "organic-cucumber",
+      "name": "Organic cucumber",
+      "unit": "each",
+      "offers": [
+        {
+          "retailer": "Kroger",
+          "product": "Organic cucumber",
+          "package_qty": 1,
+          "package_unit": "each",
+          "price": 1.39,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Sprouts",
+          "product": "Organic cucumber",
+          "package_qty": 1,
+          "package_unit": "each",
+          "price": 1.99,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Earth Fare",
+          "product": "Organic cucumber",
+          "package_qty": 1,
+          "package_unit": "each",
+          "price": 1.89,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        }
+      ]
+    },
+    {
+      "canonical_id": "organic-baby-carrots",
+      "name": "Organic baby carrots",
+      "unit": "lb",
+      "offers": [
+        {
+          "retailer": "ALDI",
+          "product": "Organic baby carrots",
+          "package_qty": 1,
+          "package_unit": "lb",
+          "price": 1.89,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Kroger",
+          "product": "Organic baby carrots",
+          "package_qty": 1,
+          "package_unit": "lb",
+          "price": 1.99,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        },
+        {
+          "retailer": "Sprouts",
+          "product": "Organic baby carrots",
+          "package_qty": 1,
+          "package_unit": "lb",
+          "price": 1.99,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        }
+      ]
+    },
+    {
+      "canonical_id": "mango",
+      "name": "Mango",
+      "unit": "each",
+      "offers": [
+        {
+          "retailer": "Earth Fare",
+          "product": "Mango",
+          "package_qty": 1,
+          "package_unit": "each",
+          "price": 1.89,
+          "match": "exact",
+          "source_type": "prototype-seed"
+        }
+      ]
+    }
+  ]
+}

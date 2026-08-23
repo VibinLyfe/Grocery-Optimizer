@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Grocery Optimizer Prototype</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <p class="eyebrow">Knoxville prototype</p>
+      <h1>What do you need?</h1>
+      <p class="sub">Type one grocery item naturally. We’ll normalize the request and compare the available retailer offers.</p>
+    </header>
+
+    <form id="form" class="search">
+      <input id="query" autocomplete="off" value="3 lb organic grass-fed 85/15 ground beef" />
+      <button type="submit">Compare prices</button>
+    </form>
+
+    <p class="examples">Try: “4 organic broccoli”, “2 organic cucumbers”, “1 lb organic baby carrots”, or “2 mangoes”.</p>
+
+    <section id="status" class="status"></section>
+    <section id="results" class="results"></section>
+
+    <footer>
+      Prototype prices are seed data for testing the optimizer. Live retailer connectors come next.
+    </footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

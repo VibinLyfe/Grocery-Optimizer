@@ -1,0 +1,22 @@
+{
+  "query": "3 lb organic grass-fed 85/15 ground beef",
+  "expected_order": [
+    {
+      "retailer": "ALDI",
+      "estimatedCost": 17.97
+    },
+    {
+      "retailer": "Kroger",
+      "estimatedCost": 20.99
+    },
+    {
+      "retailer": "Sprouts",
+      "estimatedCost": 26.97
+    },
+    {
+      "retailer": "Earth Fare",
+      "estimatedCost": 37.17
+    }
+  ],
+  "note": "Expected ordering using prototype seed data."
+}
