@@ -297,14 +297,17 @@ function scoreProduct(
     canonical ===
     "ground-beef-organic-grassfed-85-15"
   ) {
-    if (text.includes("ground beef"))
+    if (text.includes("ground beef")) {
       score += 8;
+    }
 
-    if (text.includes("organic"))
+    if (text.includes("organic")) {
       score += 6;
+    }
 
-    if (text.includes("grass"))
+    if (text.includes("grass")) {
       score += 5;
+    }
 
     if (
       text.includes("85/15") ||
@@ -323,34 +326,43 @@ function scoreProduct(
   } else if (
     canonical === "organic-broccoli"
   ) {
-    if (text.includes("broccoli"))
+    if (text.includes("broccoli")) {
       score += 8;
+    }
 
-    if (text.includes("organic"))
+    if (text.includes("organic")) {
       score += 6;
+    }
   } else if (
     canonical === "organic-cucumber"
   ) {
-    if (text.includes("cucumber"))
+    if (text.includes("cucumber")) {
       score += 8;
+    }
 
-    if (text.includes("organic"))
+    if (text.includes("organic")) {
       score += 6;
+    }
   } else if (
-    canonical ===
-    "organic-baby-carrots"
+    canonical === "organic-baby-carrots"
   ) {
-    if (text.includes("baby"))
+    if (text.includes("baby")) {
       score += 4;
+    }
 
-    if (text.includes("carrot"))
+    if (text.includes("carrot")) {
       score += 8;
+    }
 
-    if (text.includes("organic"))
+    if (text.includes("organic")) {
       score += 6;
-  } else if (canonical === "mango") {
-    if (text.includes("mango"))
+    }
+  } else if (
+    canonical === "mango"
+  ) {
+    if (text.includes("mango")) {
       score += 8;
+    }
   }
 
   return score;
@@ -358,31 +370,31 @@ function scoreProduct(
 
 function inferPackageQty(
   sizeText,
+  descriptionText,
   requestedUnit
 ) {
   const size = String(
     sizeText || ""
   ).toLowerCase();
 
+  const description = String(
+    descriptionText || ""
+  ).toLowerCase();
+
+  const combined =
+    `${description} ${size}`;
+
   if (requestedUnit === "lb") {
-    let m = size.match(
-      /(\d+(?:\.\d+)?)\s*(?:lb|lbs|pound|pounds)\b/
-    );
 
-    if (m) {
-      return Number(m[1]);
-    }
-
-    m = size.match(
-      /(\d+(?:\.\d+)?)\s*oz\b/
-    );
-
-    if (m) {
-      return Number(m[1]) / 16;
-    }
-
-    m = size.match(
-      /(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:lb|lbs)\b/
+    /*
+     * FIRST:
+     * Look for explicit multi-pack wording:
+     *
+     * 3 x 1 lb
+     * 3 × 1 lb
+     */
+    let m = combined.match(
+      /(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:lb|lbs|pound|pounds)\b/
     );
 
     if (m) {
@@ -390,6 +402,53 @@ function inferPackageQty(
         Number(m[1]) *
         Number(m[2])
       );
+    }
+
+    /*
+     * SECOND:
+     * Kroger sometimes puts the total
+     * package weight in the product
+     * description rather than item.size.
+     *
+     * Example:
+     *
+     * "Simple Truth Organic 85/15
+     * Grass Fed Ground Beef Packs
+     * 3 LB BIG DEAL!"
+     *
+     * This should be interpreted as
+     * ONE package supplying 3 lb.
+     */
+    m = description.match(
+      /\b(\d+(?:\.\d+)?)\s*(?:lb|lbs|pound|pounds)\b/
+    );
+
+    if (m) {
+      return Number(m[1]);
+    }
+
+    /*
+     * THIRD:
+     * Fall back to Kroger's item.size.
+     */
+    m = size.match(
+      /(\d+(?:\.\d+)?)\s*(?:lb|lbs|pound|pounds)\b/
+    );
+
+    if (m) {
+      return Number(m[1]);
+    }
+
+    /*
+     * FOURTH:
+     * Convert ounces to pounds.
+     */
+    m = size.match(
+      /(\d+(?:\.\d+)?)\s*oz\b/
+    );
+
+    if (m) {
+      return Number(m[1]) / 16;
     }
   }
 
@@ -428,7 +487,9 @@ async function searchLiveKroger(
       const priceInfo =
         extractPrice(item);
 
-      if (!priceInfo) continue;
+      if (!priceInfo) {
+        continue;
+      }
 
       const score = scoreProduct(
         product,
@@ -436,10 +497,13 @@ async function searchLiveKroger(
         parsed.canonical
       );
 
-      if (score <= 0) continue;
+      if (score <= 0) {
+        continue;
+      }
 
       candidates.push({
         retailer: "Kroger",
+
         product:
           product.description ||
           "Kroger product",
@@ -452,9 +516,21 @@ async function searchLiveKroger(
           product.upc ||
           null,
 
+        /*
+         * IMPORTANT NORMALIZATION FIX:
+         *
+         * We now pass BOTH item.size
+         * and product.description.
+         *
+         * This allows a Kroger product
+         * described as "3 LB BIG DEAL!"
+         * to be recognized as a
+         * three-pound package.
+         */
         package_qty:
           inferPackageQty(
             item.size,
+            product.description,
             productSeed.unit
           ),
 
@@ -511,10 +587,11 @@ async function searchLiveKroger(
 
   return {
     store,
+
     offers: candidates
       .filter(
-        (c) =>
-          c.score >=
+        (candidate) =>
+          candidate.score >=
           Math.max(
             8,
             bestScore - 5
@@ -528,37 +605,48 @@ function bestPackageCombo(
   offers,
   requestedQty
 ) {
-  if (!offers.length) return null;
+  if (!offers.length) {
+    return null;
+  }
 
   const maxPackage = Math.max(
-    ...offers.map((o) =>
-      Number(o.package_qty || 1)
+    ...offers.map((offer) =>
+      Number(
+        offer.package_qty || 1
+      )
     )
   );
 
   const scale = 100;
+
   const target = Math.ceil(
     requestedQty * scale
   );
 
   const max = Math.ceil(
-    (requestedQty +
+    (
+      requestedQty +
       maxPackage * 3 +
-      5) *
-      scale
+      5
+    ) * scale
   );
 
-  const dp = Array(max + 1).fill(
-    null
-  );
+  const dp =
+    Array(max + 1).fill(null);
 
   dp[0] = {
     cost: 0,
     picks: []
   };
 
-  for (let i = 0; i <= max; i++) {
-    if (!dp[i]) continue;
+  for (
+    let i = 0;
+    i <= max;
+    i++
+  ) {
+    if (!dp[i]) {
+      continue;
+    }
 
     for (const offer of offers) {
       const step = Math.max(
@@ -570,20 +658,25 @@ function bestPackageCombo(
         )
       );
 
-      const ni = i + step;
+      const nextIndex =
+        i + step;
 
-      if (ni > max) continue;
+      if (nextIndex > max) {
+        continue;
+      }
 
       const nextCost =
         dp[i].cost +
         Number(offer.price);
 
       if (
-        !dp[ni] ||
-        nextCost < dp[ni].cost
+        !dp[nextIndex] ||
+        nextCost <
+          dp[nextIndex].cost
       ) {
-        dp[ni] = {
+        dp[nextIndex] = {
           cost: nextCost,
+
           picks: [
             ...dp[i].picks,
             offer
@@ -600,21 +693,31 @@ function bestPackageCombo(
     i <= max;
     i++
   ) {
-    if (!dp[i]) continue;
+    if (!dp[i]) {
+      continue;
+    }
 
     const candidate = {
-      totalQty: i / scale,
-      cost: dp[i].cost,
-      picks: dp[i].picks
+      totalQty:
+        i / scale,
+
+      cost:
+        dp[i].cost,
+
+      picks:
+        dp[i].picks
     };
 
     if (
       !best ||
-      candidate.cost < best.cost ||
-      (candidate.cost ===
-        best.cost &&
+      candidate.cost <
+        best.cost ||
+      (
+        candidate.cost ===
+          best.cost &&
         candidate.totalQty <
-          best.totalQty)
+          best.totalQty
+      )
     ) {
       best = candidate;
     }
@@ -630,17 +733,23 @@ function buildRetailerResult(
   unit,
   dataMode
 ) {
-  const best = bestPackageCombo(
-    offers,
-    requestedQty
-  );
+  const best =
+    bestPackageCombo(
+      offers,
+      requestedQty
+    );
 
-  if (!best) return null;
+  if (!best) {
+    return null;
+  }
 
   return {
     retailer,
+
     requestedQty,
-    requestedUnit: unit,
+
+    requestedUnit:
+      unit,
 
     totalQty: Number(
       best.totalQty.toFixed(2)
@@ -650,259 +759,325 @@ function buildRetailerResult(
       best.cost.toFixed(2)
     ),
 
-    match: best.picks.every(
-      (p) => p.match === "exact"
-    )
-      ? "exact"
-      : best.picks.some(
-          (p) =>
-            p.match === "possible"
-        )
-      ? "possible"
-      : "estimated",
+    match:
+      best.picks.every(
+        (pick) =>
+          pick.match === "exact"
+      )
+        ? "exact"
+        : best.picks.some(
+            (pick) =>
+              pick.match ===
+              "possible"
+          )
+        ? "possible"
+        : "estimated",
 
     dataMode,
 
-    packages: best.picks.map(
-      (p) => ({
-        product: p.product,
-        brand: p.brand || null,
+    packages:
+      best.picks.map(
+        (pick) => ({
+          product:
+            pick.product,
 
-        packageQty: Number(
-          p.package_qty || 1
-        ),
+          brand:
+            pick.brand || null,
 
-        packageUnit:
-          p.package_unit,
+          packageQty:
+            Number(
+              pick.package_qty || 1
+            ),
 
-        size:
-          p.size || null,
+          packageUnit:
+            pick.package_unit,
 
-        price:
-          Number(p.price),
+          size:
+            pick.size || null,
 
-        regularPrice:
-          p.regularPrice || null,
+          price:
+            Number(
+              pick.price
+            ),
 
-        priceType:
-          p.priceType || null,
+          regularPrice:
+            pick.regularPrice ||
+            null,
 
-        sourceType:
-          p.source_type,
+          priceType:
+            pick.priceType ||
+            null,
 
-        productId:
-          p.productId || null
-      })
-    )
+          sourceType:
+            pick.source_type,
+
+          productId:
+            pick.productId ||
+            null
+        })
+      )
   };
 }
 
-exports.handler = async function (
-  event
-) {
-  try {
-    const text =
-      event.queryStringParameters?.q ||
-      "";
-
-    const parsed =
-      parseRequest(text);
-
-    if (!parsed.canonical) {
-      return json(200, {
-        ok: false,
-        parsed,
-
-        message:
-          "Prototype currently recognizes: organic grass-fed 85/15 ground beef, organic broccoli, organic cucumber, organic baby carrots, and mango."
-      });
-    }
-
-    const seed =
-      loadSeedData();
-
-    const product =
-      seed.products.find(
-        (p) =>
-          p.canonical_id ===
-          parsed.canonical
-      );
-
-    const results = [];
-
-    let krogerStatus = {
-      live: false,
-      message:
-        "Kroger live connector was not attempted."
-    };
-
-    /*
-     * LIVE KROGER
-     */
+exports.handler =
+  async function (event) {
     try {
-      const live =
-        await searchLiveKroger(
+      const text =
+        event
+          .queryStringParameters
+          ?.q || "";
+
+      const parsed =
+        parseRequest(text);
+
+      if (!parsed.canonical) {
+        return json(200, {
+          ok: false,
+
           parsed,
-          product
+
+          message:
+            "Prototype currently recognizes: organic grass-fed 85/15 ground beef, organic broccoli, organic cucumber, organic baby carrots, and mango."
+        });
+      }
+
+      const seed =
+        loadSeedData();
+
+      const product =
+        seed.products.find(
+          (product) =>
+            product.canonical_id ===
+            parsed.canonical
         );
 
-      if (live.offers.length) {
-        const result =
-          buildRetailerResult(
-            "Kroger",
-            live.offers,
-            parsed.qty,
-            product.unit,
-            "live"
+      if (!product) {
+        return json(200, {
+          ok: false,
+
+          message:
+            "The requested product is not currently configured in the prototype seed data."
+        });
+      }
+
+      const results = [];
+
+      let krogerStatus = {
+        live: false,
+
+        message:
+          "Kroger live connector was not attempted."
+      };
+
+      /*
+       * =========================
+       * LIVE KROGER CONNECTOR
+       * =========================
+       */
+      try {
+        const live =
+          await searchLiveKroger(
+            parsed,
+            product
           );
 
-        if (result) {
-          result.location = {
-            locationId:
-              live.store.locationId,
-
-            name:
-              live.store.name ||
+        if (
+          live.offers.length
+        ) {
+          const result =
+            buildRetailerResult(
               "Kroger",
+              live.offers,
+              parsed.qty,
+              product.unit,
+              "live"
+            );
 
-            address:
-              live.store.address ||
-              null
-          };
+          if (result) {
+            result.location = {
+              locationId:
+                live.store
+                  .locationId,
 
-          results.push(result);
+              name:
+                live.store.name ||
+                "Kroger",
 
+              address:
+                live.store
+                  .address ||
+                null
+            };
+
+            results.push(
+              result
+            );
+
+            krogerStatus = {
+              live: true,
+
+              message:
+                `Live Kroger API connected to ${
+                  live.store.name ||
+                  "Kroger"
+                }.`,
+
+              locationId:
+                live.store
+                  .locationId,
+
+              address:
+                live.store
+                  .address ||
+                null,
+
+              candidateCount:
+                live.offers
+                  .length
+            };
+          }
+        } else {
           krogerStatus = {
             live: true,
 
             message:
-              `Live Kroger API connected to ${
-                live.store.name ||
-                "Kroger"
-              }.`,
-
-            locationId:
-              live.store.locationId,
-
-            address:
-              live.store.address ||
-              null,
-
-            candidateCount:
-              live.offers.length
+              "Kroger API connected, but no sufficiently relevant priced product was returned."
           };
         }
-      } else {
+      } catch (error) {
         krogerStatus = {
-          live: true,
+          live: false,
 
           message:
-            "Kroger API connected, but no sufficiently relevant priced product was returned."
+            error.message
         };
       }
-    } catch (error) {
-      krogerStatus = {
-        live: false,
-        message: error.message
-      };
-    }
 
-    /*
-     * SEED DATA FOR
-     * ALDI / SPROUTS /
-     * EARTH FARE
-     */
-    const grouped = {};
+      /*
+       * =========================
+       * PROTOTYPE SEED DATA
+       * ALDI / SPROUTS /
+       * EARTH FARE
+       * =========================
+       */
+      const grouped = {};
 
-    for (
-      const offer of product.offers
-    ) {
-      if (
-        offer.retailer === "Kroger"
+      for (
+        const offer of
+        product.offers
       ) {
-        continue;
-      }
-
-      if (
-        offer.package_unit !==
-        product.unit
-      ) {
-        continue;
-      }
-
-      grouped[offer.retailer] ??=
-        [];
-
-      grouped[offer.retailer].push(
-        offer
-      );
-    }
-
-    for (
-      const [retailer, offers] of
-      Object.entries(grouped)
-    ) {
-      const result =
-        buildRetailerResult(
-          retailer,
-          offers,
-          parsed.qty,
-          product.unit,
-          "prototype-seed"
-        );
-
-      if (result) {
-        results.push(result);
-      }
-    }
-
-    results.sort(
-      (a, b) =>
-        a.estimatedCost -
-        b.estimatedCost
-    );
-
-    return json(200, {
-      ok: true,
-      parsed,
-
-      product:
-        product.name,
-
-      market:
-        "Knoxville, TN",
-
-      disclaimer:
-        "Kroger uses live API data when available. Other retailers are still prototype seed data and should not be relied on as current shelf prices.",
-
-      connectors: {
-        kroger: krogerStatus,
-
-        aldi: {
-          live: false,
-          mode: "prototype-seed"
-        },
-
-        sprouts: {
-          live: false,
-          mode: "prototype-seed"
-        },
-
-        earthFare: {
-          live: false,
-          mode: "prototype-seed"
+        /*
+         * Never use Kroger seed
+         * data anymore.
+         *
+         * Kroger must come from
+         * the live API.
+         */
+        if (
+          offer.retailer ===
+          "Kroger"
+        ) {
+          continue;
         }
-      },
 
-      results,
+        if (
+          offer.package_unit !==
+          product.unit
+        ) {
+          continue;
+        }
 
-      winner:
-        results[0] || null
-    });
-  } catch (err) {
-    return json(500, {
-      ok: false,
-      error: err.message
-    });
-  }
-};
+        grouped[
+          offer.retailer
+        ] ??= [];
+
+        grouped[
+          offer.retailer
+        ].push(offer);
+      }
+
+      for (
+        const [
+          retailer,
+          offers
+        ] of Object.entries(
+          grouped
+        )
+      ) {
+        const result =
+          buildRetailerResult(
+            retailer,
+            offers,
+            parsed.qty,
+            product.unit,
+            "prototype-seed"
+          );
+
+        if (result) {
+          results.push(
+            result
+          );
+        }
+      }
+
+      /*
+       * Cheapest retailer first.
+       */
+      results.sort(
+        (a, b) =>
+          a.estimatedCost -
+          b.estimatedCost
+      );
+
+      return json(200, {
+        ok: true,
+
+        parsed,
+
+        product:
+          product.name,
+
+        market:
+          "Knoxville, TN",
+
+        disclaimer:
+          "Kroger uses live API data when available. Other retailers are still prototype seed data and should not be relied on as current shelf prices.",
+
+        connectors: {
+          kroger:
+            krogerStatus,
+
+          aldi: {
+            live: false,
+            mode:
+              "prototype-seed"
+          },
+
+          sprouts: {
+            live: false,
+            mode:
+              "prototype-seed"
+          },
+
+          earthFare: {
+            live: false,
+            mode:
+              "prototype-seed"
+          }
+        },
+
+        results,
+
+        winner:
+          results[0] ||
+          null
+      });
+    } catch (error) {
+      return json(500, {
+        ok: false,
+
+        error:
+          error.message
+      });
+    }
+  };
