@@ -1,0 +1,30 @@
+[
+  {
+    "canonicalId": "organic-broccoli",
+    "retailer": "Earth Fare",
+    "title": "Organic Broccoli",
+    "description": "Fresh organic broccoli",
+    "size": "1 each",
+    "price": 4.49,
+    "productId": "16345572",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-product-record",
+    "observedAt": null
+  },
+  {
+    "canonicalId": "mango",
+    "retailer": "Earth Fare",
+    "title": "Organic Mango",
+    "description": "Fresh organic mango",
+    "size": "1 each",
+    "price": 1.89,
+    "productId": "16617047",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-product-record",
+    "observedAt": null
+  }
+]
