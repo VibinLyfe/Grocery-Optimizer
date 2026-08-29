@@ -1,22 +1,28 @@
 [
   {
-    "canonicalId": "organic-broccoli",
+    "canonicalId": "custom-organic-japanese-yams",
     "retailer": "Earth Fare",
-    "title": "Organic Broccoli",
-    "description": "Fresh organic broccoli",
-    "size": "1 each",
-    "price": 4.49,
-    "productId": "16345572",
+    "title": "Organic Japanese Sweet Potato",
+    "brand": null,
+    "description": "Organic Japanese Sweet Potato",
+    "size": "0.84 lb each",
+    "price": 3.76,
+    "productId": null,
     "market": "Knoxville, TN",
     "locationConfirmed": false,
     "marketConfirmed": false,
-    "sourceType": "public-product-record",
-    "observedAt": null
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/16383645-organic-japanese-sweet-potato-each",
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
   },
   {
     "canonicalId": "mango",
     "retailer": "Earth Fare",
     "title": "Organic Mango",
+    "brand": null,
     "description": "Fresh organic mango",
     "size": "1 each",
     "price": 1.89,
@@ -25,6 +31,23 @@
     "locationConfirmed": false,
     "marketConfirmed": false,
     "sourceType": "public-product-record",
+    "sourceUrl": null,
+    "observedAt": null
+  },
+  {
+    "canonicalId": "organic-broccoli",
+    "retailer": "Earth Fare",
+    "title": "Organic Broccoli",
+    "brand": null,
+    "description": "Fresh organic broccoli",
+    "size": "1 each",
+    "price": 4.49,
+    "productId": "16345572",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-product-record",
+    "sourceUrl": null,
     "observedAt": null
   }
 ]
