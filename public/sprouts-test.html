@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+
+  <title>Sprouts Evidence Test</title>
+
+  <style>
+    body {
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 20px;
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: 16px;
+      padding: 12px 18px;
+      cursor: pointer;
+    }
+
+    pre {
+      margin-top: 24px;
+      padding: 20px;
+      background: #f4f4f4;
+      border-radius: 8px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .status {
+      margin-top: 18px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Sprouts Evidence Test</h1>
+
+  <p>
+    This sends one verified Organic Murasaki Sweet Potato
+    evidence record through the evidence-merge function.
+  </p>
+
+  <button id="runTest">
+    Run Sprouts Test
+  </button>
+
+  <div
+    id="status"
+    class="status"
+  ></div>
+
+  <pre id="output">
+No test has been run yet.
+  </pre>
+
+
+  <script>
+    const button =
+      document.getElementById(
+        "runTest"
+      );
+
+    const status =
+      document.getElementById(
+        "status"
+      );
+
+    const output =
+      document.getElementById(
+        "output"
+      );
+
+
+    const testPayload = {
+      retailer:
+        "Sprouts",
+
+      records: [
+        {
+          canonicalId:
+            "custom-organic-japanese-yams",
+
+          title:
+            "Organic Murasaki Sweet Potato Bag",
+
+          description:
+            "Organic Murasaki Sweet Potato Bag",
+
+          size:
+            "3 lb",
+
+          price:
+            8.99,
+
+          productId:
+            "73667163",
+
+          sourceType:
+            "public-indexed-product-page",
+
+          sourceUrl:
+            "https://shop.sprouts.com/store/sprouts/products/73667163-organic-japanese-sweet-potato-bag-3-lb",
+
+          observedAt:
+            "2026-08-29",
+
+          market:
+            "Knoxville, TN",
+
+          marketConfirmed:
+            false,
+
+          locationConfirmed:
+            false,
+
+          attributes: {
+            organic: true
+          }
+        }
+      ]
+    };
+
+
+    async function runTest() {
+
+      button.disabled =
+        true;
+
+      status.textContent =
+        "Running test...";
+
+      output.textContent =
+        "";
+
+
+      try {
+
+        const response =
+          await fetch(
+            "/api/evidence-merge",
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify(
+                  testPayload
+                )
+            }
+          );
+
+
+        const text =
+          await response.text();
+
+
+        let data;
+
+        try {
+          data =
+            JSON.parse(
+              text
+            );
+
+        } catch {
+          data = {
+            rawResponse:
+              text
+          };
+        }
+
+
+        status.textContent =
+          response.ok
+            ? "Test completed."
+            : `Test failed with HTTP ${response.status}.`;
+
+
+        output.textContent =
+          JSON.stringify(
+            data,
+            null,
+            2
+          );
+
+
+      } catch (
+        error
+      ) {
+
+        status.textContent =
+          "Test failed.";
+
+        output.textContent =
+          JSON.stringify(
+            {
+              error:
+                error.message
+            },
+            null,
+            2
+          );
+
+      } finally {
+
+        button.disabled =
+          false;
+      }
+    }
+
+
+    button.addEventListener(
+      "click",
+      runTest
+    );
+  </script>
+
+</body>
+</html>
