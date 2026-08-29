@@ -5,23 +5,23 @@
  *
  * Retrieval order:
  *
- * 1. Stored dated Sprouts evidence
- * 2. Dynamic public-search fallback
+ * 1. Load bundled sprouts-evidence.json
+ * 2. Find evidence matching the requested canonical product
+ * 3. Normalize + validate + price package requirements
+ * 4. If no acceptable evidence remains, attempt dynamic fallback
  *
- * IMPORTANT:
- * The dynamic adapter currently has no permitted
- * live provider configured, so today the practical
- * fallback is still the evidence-refresh workflow.
+ * Dynamic fallback currently has no permitted live provider
+ * configured. That is intentional.
  */
 
 const fs = require("fs");
 const path = require("path");
 
 const {
-  createEvidenceRetailer,
-  getFreshnessStatus,
-  calculateAgeDays
-} = require("./evidence-retailer");
+  normalizeOffer,
+  scoreProductMatch,
+  calculatePackageRequirement
+} = require("./normalize");
 
 const {
   searchSproutsDynamic,
@@ -31,7 +31,7 @@ const {
 
 /*
  * =====================================================
- * SPROUTS MARKET
+ * MARKET
  * =====================================================
  */
 
@@ -47,36 +47,217 @@ const SPROUTS_MARKET = {
 
 /*
  * =====================================================
- * SPROUTS EVIDENCE CONFIG
+ * FRESHNESS
  * =====================================================
  */
 
-const sproutsEvidenceAdapter =
-  createEvidenceRetailer({
-    retailer: "Sprouts",
+const CURRENT_MAX_DAYS = 7;
+const AGING_MAX_DAYS = 14;
 
-    market:
-      SPROUTS_MARKET,
 
-    minimumMatchScore:
-      60,
+function parseObservedDate(value) {
+  if (!value) {
+    return null;
+  }
 
-    minimumConfidenceScore:
-      55,
+  const date =
+    new Date(value);
 
-    trustedSourceTypes: [
-      "retailer-product-page",
-      "retailer-weekly-ad",
-      "retailer-digital-ad",
-      "public-product-record",
-      "public-indexed-product-page"
-    ]
-  });
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+
+function calculateAgeDays(value) {
+  const observed =
+    parseObservedDate(value);
+
+  if (!observed) {
+    return null;
+  }
+
+  const now =
+    new Date();
+
+  const ageMs =
+    now.getTime() -
+    observed.getTime();
+
+  if (
+    !Number.isFinite(ageMs)
+  ) {
+    return null;
+  }
+
+  return Math.max(
+    0,
+    Math.floor(
+      ageMs /
+      86400000
+    )
+  );
+}
+
+
+function getFreshnessStatus(
+  observedAt
+) {
+  const ageDays =
+    calculateAgeDays(
+      observedAt
+    );
+
+  if (
+    ageDays === null
+  ) {
+    return {
+      freshness: "unknown",
+      ageDays: null,
+      needsRefresh: true
+    };
+  }
+
+  if (
+    ageDays <=
+    CURRENT_MAX_DAYS
+  ) {
+    return {
+      freshness: "current",
+      ageDays,
+      needsRefresh: false
+    };
+  }
+
+  if (
+    ageDays <=
+    AGING_MAX_DAYS
+  ) {
+    return {
+      freshness: "aging",
+      ageDays,
+      needsRefresh: true
+    };
+  }
+
+  return {
+    freshness: "stale",
+    ageDays,
+    needsRefresh: true
+  };
+}
 
 
 /*
  * =====================================================
- * LOAD EVIDENCE FILE
+ * CONFIDENCE
+ * =====================================================
+ */
+
+function scoreConfidence(
+  evidence
+) {
+  let score = 0;
+
+  if (
+    evidence.retailer ===
+    "Sprouts"
+  ) {
+    score += 20;
+  }
+
+  if (
+    Number(
+      evidence.price
+    ) > 0
+  ) {
+    score += 20;
+  }
+
+  if (
+    evidence.size
+  ) {
+    score += 15;
+  }
+
+  if (
+    evidence.locationConfirmed ===
+    true
+  ) {
+    score += 20;
+
+  } else if (
+    evidence.marketConfirmed ===
+    true
+  ) {
+    score += 10;
+  }
+
+  const freshness =
+    getFreshnessStatus(
+      evidence.observedAt
+    );
+
+  if (
+    freshness.freshness ===
+    "current"
+  ) {
+    score += 15;
+
+  } else if (
+    freshness.freshness ===
+    "aging"
+  ) {
+    score += 8;
+
+  } else if (
+    freshness.freshness ===
+    "stale"
+  ) {
+    score += 2;
+  }
+
+  const trustedSources = [
+    "retailer-product-page",
+    "retailer-weekly-ad",
+    "retailer-digital-ad",
+    "public-product-record",
+    "public-indexed-product-page"
+  ];
+
+  if (
+    trustedSources.includes(
+      evidence.sourceType
+    )
+  ) {
+    score += 10;
+  }
+
+  if (
+    evidence.sourceUrl
+  ) {
+    score += 5;
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(score)
+    )
+  );
+}
+
+
+/*
+ * =====================================================
+ * LOAD SPROUTS EVIDENCE
  * =====================================================
  */
 
@@ -98,41 +279,43 @@ function loadSproutsEvidence() {
     )
   ];
 
-
   for (
     const filePath of
     candidates
   ) {
     try {
       if (
-        fs.existsSync(
+        !fs.existsSync(
           filePath
         )
       ) {
-        const parsed =
-          JSON.parse(
-            fs.readFileSync(
-              filePath,
-              "utf8"
-            )
-          );
+        continue;
+      }
 
-        return Array.isArray(
+      const parsed =
+        JSON.parse(
+          fs.readFileSync(
+            filePath,
+            "utf8"
+          )
+        );
+
+      if (
+        Array.isArray(
           parsed
         )
-          ? parsed
-          : [];
+      ) {
+        return parsed;
       }
 
     } catch (
       error
     ) {
       /*
-       * Try the next possible path.
+       * Try next path.
        */
     }
   }
-
 
   return [];
 }
@@ -140,45 +323,520 @@ function loadSproutsEvidence() {
 
 /*
  * =====================================================
- * RETRIEVE EVIDENCE CANDIDATES
+ * ATTRIBUTE SAFETY
+ *
+ * Do not allow a non-organic record to satisfy an
+ * explicitly organic request, etc.
  * =====================================================
  */
 
-function retrieveSproutsCandidates(
-  request
+function passesAttributeConstraints(
+  request,
+  normalized
 ) {
-  const records =
-    loadSproutsEvidence();
+  const required =
+    request?.attributes ||
+    {};
 
-  return sproutsEvidenceAdapter
-    .getOffers(
-      request,
-      records
-    );
+  const offered =
+    normalized?.attributes ||
+    {};
+
+  if (
+    required.organic &&
+    !offered.organic
+  ) {
+    return false;
+  }
+
+  if (
+    required.grassFed &&
+    !offered.grassFed
+  ) {
+    return false;
+  }
+
+  if (
+    required.lean8515 &&
+    !offered.lean8515
+  ) {
+    return false;
+  }
+
+  if (
+    required.wholeBean &&
+    !offered.wholeBean
+  ) {
+    return false;
+  }
+
+  if (
+    required.frozen &&
+    !offered.frozen
+  ) {
+    return false;
+  }
+
+  if (
+    required.fresh &&
+    offered.frozen
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 
 /*
  * =====================================================
- * BUILD EVIDENCE RESULT
+ * CANONICAL FILTER
+ *
+ * This is the key behavior for custom products.
+ *
+ * custom-organic-japanese-yams
+ *
+ * must be allowed to retrieve the evidence record with
+ * that exact canonicalId.
  * =====================================================
  */
 
-function buildEvidenceResult(
-  adapterResult
+function filterSproutsEvidence(
+  request,
+  records
 ) {
-  const offers =
-    Array.isArray(
-      adapterResult?.offers
-    )
-      ? adapterResult.offers
+  const safeRecords =
+    Array.isArray(records)
+      ? records
       : [];
 
-  const retrieval =
-    adapterResult?.retrieval ||
-    {};
+  const canonicalId =
+    request?.canonicalId ||
+    null;
+
+  if (!canonicalId) {
+    return safeRecords;
+  }
+
+  return safeRecords.filter(
+    record =>
+      record?.canonicalId ===
+      canonicalId
+  );
+}
 
 
+/*
+ * =====================================================
+ * RETRIEVE RAW CANDIDATES
+ * =====================================================
+ */
+
+function retrieveSproutsCandidates(
+  request,
+  suppliedEvidence = null
+) {
+  const allEvidence =
+    Array.isArray(
+      suppliedEvidence
+    )
+      ? suppliedEvidence
+      : loadSproutsEvidence();
+
+  return filterSproutsEvidence(
+    request,
+    allEvidence
+  );
+}
+
+
+/*
+ * =====================================================
+ * NORMALIZE ONE EVIDENCE RECORD
+ * =====================================================
+ */
+
+function normalizeSproutsEvidence(
+  evidence
+) {
+  if (!evidence) {
+    return null;
+  }
+
+  const normalized =
+    normalizeOffer({
+      retailer:
+        "Sprouts",
+
+      title:
+        evidence.title ||
+        evidence.product ||
+        "",
+
+      brand:
+        evidence.brand ||
+        null,
+
+      description:
+        evidence.description ||
+        evidence.title ||
+        "",
+
+      size:
+        evidence.size ||
+        "",
+
+      price:
+        evidence.price,
+
+      productId:
+        evidence.productId ||
+        evidence.upc ||
+        null,
+
+      attributes:
+        evidence.attributes ||
+        null,
+
+      location: {
+        retailer:
+          "Sprouts",
+
+        city:
+          SPROUTS_MARKET.city,
+
+        state:
+          SPROUTS_MARKET.state,
+
+        zip:
+          SPROUTS_MARKET.zip,
+
+        address:
+          SPROUTS_MARKET.address,
+
+        market:
+          SPROUTS_MARKET.market,
+
+        confirmed:
+          Boolean(
+            evidence.locationConfirmed
+          ),
+
+        locationConfirmed:
+          Boolean(
+            evidence.locationConfirmed
+          ),
+
+        marketConfirmed:
+          Boolean(
+            evidence.marketConfirmed
+          )
+      },
+
+      source: {
+        type:
+          evidence.sourceType ||
+          "public-product-record",
+
+        url:
+          evidence.sourceUrl ||
+          null,
+
+        observedAt:
+          evidence.observedAt ||
+          null
+      }
+    });
+
+  if (!normalized) {
+    return null;
+  }
+
+  const freshness =
+    getFreshnessStatus(
+      evidence.observedAt
+    );
+
+  normalized.confidenceScore =
+    scoreConfidence({
+      retailer:
+        "Sprouts",
+
+      price:
+        evidence.price,
+
+      size:
+        evidence.size,
+
+      locationConfirmed:
+        evidence.locationConfirmed,
+
+      marketConfirmed:
+        evidence.marketConfirmed,
+
+      observedAt:
+        evidence.observedAt,
+
+      sourceType:
+        evidence.sourceType,
+
+      sourceUrl:
+        evidence.sourceUrl
+    });
+
+  normalized.canonicalId =
+    evidence.canonicalId ||
+    null;
+
+  normalized.observedAt =
+    evidence.observedAt ||
+    null;
+
+  normalized.sourceType =
+    evidence.sourceType ||
+    "public-product-record";
+
+  normalized.sourceUrl =
+    evidence.sourceUrl ||
+    null;
+
+  normalized.freshness =
+    freshness.freshness;
+
+  normalized.ageDays =
+    freshness.ageDays;
+
+  normalized.needsRefresh =
+    freshness.needsRefresh;
+
+  return normalized;
+}
+
+
+/*
+ * =====================================================
+ * BUILD ACCEPTABLE STORED OFFERS
+ * =====================================================
+ */
+
+function buildSproutsEvidenceOffers(
+  request,
+  rawCandidates
+) {
+  const offers = [];
+
+  const candidates =
+    Array.isArray(
+      rawCandidates
+    )
+      ? rawCandidates
+      : [];
+
+  for (
+    const candidate of
+    candidates
+  ) {
+    const normalized =
+      normalizeSproutsEvidence(
+        candidate
+      );
+
+    if (!normalized) {
+      continue;
+    }
+
+    if (
+      !passesAttributeConstraints(
+        request,
+        normalized
+      )
+    ) {
+      continue;
+    }
+
+    const matchScore =
+      scoreProductMatch(
+        request,
+        normalized
+      );
+
+    const packagePlan =
+      calculatePackageRequirement(
+        request,
+        normalized
+      );
+
+    if (
+      !packagePlan
+    ) {
+      continue;
+    }
+
+    if (
+      matchScore < 60
+    ) {
+      continue;
+    }
+
+    if (
+      normalized
+        .confidenceScore <
+      55
+    ) {
+      continue;
+    }
+
+    offers.push({
+      retailer:
+        "Sprouts",
+
+      title:
+        normalized.title,
+
+      brand:
+        normalized.brand ||
+        null,
+
+      productId:
+        normalized.productId ||
+        null,
+
+      canonicalId:
+        candidate.canonicalId ||
+        null,
+
+      package:
+        normalized.package,
+
+      price:
+        normalized.price,
+
+      attributes:
+        normalized.attributes,
+
+      location:
+        normalized.location,
+
+      source:
+        normalized.source,
+
+      sourceType:
+        normalized.sourceType,
+
+      sourceUrl:
+        normalized.sourceUrl,
+
+      observedAt:
+        normalized.observedAt,
+
+      freshness:
+        normalized.freshness,
+
+      ageDays:
+        normalized.ageDays,
+
+      needsRefresh:
+        normalized.needsRefresh,
+
+      matchScore,
+
+      confidenceScore:
+        normalized
+          .confidenceScore,
+
+      purchasePlan:
+        packagePlan,
+
+      totalCost:
+        packagePlan.totalCost
+    });
+  }
+
+  offers.sort(
+    (a, b) =>
+      a.totalCost -
+        b.totalCost ||
+
+      b.matchScore -
+        a.matchScore ||
+
+      b.confidenceScore -
+        a.confidenceScore
+  );
+
+  return offers;
+}
+
+
+/*
+ * =====================================================
+ * FRESHNESS SUMMARY
+ * =====================================================
+ */
+
+function summarizeEvidenceFreshness(
+  offers
+) {
+  const summary = {
+    current: 0,
+    aging: 0,
+    stale: 0,
+    unknown: 0,
+    needsRefresh: 0
+  };
+
+  const safeOffers =
+    Array.isArray(offers)
+      ? offers
+      : [];
+
+  for (
+    const offer of
+    safeOffers
+  ) {
+    const freshness =
+      offer.freshness ||
+      "unknown";
+
+    if (
+      Object.prototype
+        .hasOwnProperty.call(
+          summary,
+          freshness
+        )
+    ) {
+      summary[freshness] +=
+        1;
+
+    } else {
+      summary.unknown +=
+        1;
+    }
+
+    if (
+      offer.needsRefresh ===
+      true
+    ) {
+      summary.needsRefresh +=
+        1;
+    }
+  }
+
+  return summary;
+}
+
+
+/*
+ * =====================================================
+ * STORED EVIDENCE RESULT
+ * =====================================================
+ */
+
+function buildStoredEvidenceResult(
+  request,
+  rawCandidates,
+  offers
+) {
   return {
     retailer:
       "Sprouts",
@@ -186,31 +844,32 @@ function buildEvidenceResult(
     market:
       SPROUTS_MARKET,
 
+    request,
+
     offers,
+
+    winner:
+      offers[0] ||
+      null,
 
     retrieval: {
       source:
-        retrieval.source ||
-        (
-          offers.length
-            ? "sprouts-evidence-file"
-            : "evidence-file-no-match"
-        ),
+        offers.length
+          ? "sprouts-evidence-file"
+          : "evidence-file-no-match",
+
+      /*
+       * recordCount means records matching this requested
+       * canonical product, not all records in the file.
+       */
 
       recordCount:
-        Number(
-          retrieval.recordCount ||
-          0
-        ),
+        rawCandidates.length,
 
       acceptedCount:
-        Number(
-          retrieval.acceptedCount ||
-          offers.length
-        ),
+        offers.length,
 
       freshness:
-        retrieval.freshness ||
         summarizeEvidenceFreshness(
           offers
         ),
@@ -236,112 +895,12 @@ function buildEvidenceResult(
 
 /*
  * =====================================================
- * EVIDENCE FRESHNESS SUMMARY
+ * DYNAMIC RESULT
  * =====================================================
  */
 
-function summarizeEvidenceFreshness(
-  offers
-) {
-  const summary = {
-    current: 0,
-    aging: 0,
-    stale: 0,
-    unknown: 0,
-    needsRefresh: 0
-  };
-
-  const safeOffers =
-    Array.isArray(
-      offers
-    )
-      ? offers
-      : [];
-
-
-  for (
-    const offer of
-    safeOffers
-  ) {
-    let freshness =
-      offer?.freshness ||
-      null;
-
-
-    if (!freshness) {
-      const status =
-        getFreshnessStatus(
-          offer?.observedAt ||
-          offer?.source
-            ?.observedAt ||
-          null
-        );
-
-      freshness =
-        status?.freshness ||
-        "unknown";
-    }
-
-
-    if (
-      Object.prototype
-        .hasOwnProperty.call(
-          summary,
-          freshness
-        )
-    ) {
-      summary[freshness] +=
-        1;
-
-    } else {
-      summary.unknown +=
-        1;
-    }
-
-
-    let needsRefresh =
-      offer?.needsRefresh;
-
-
-    if (
-      typeof needsRefresh !==
-      "boolean"
-    ) {
-      const status =
-        getFreshnessStatus(
-          offer?.observedAt ||
-          offer?.source
-            ?.observedAt ||
-          null
-        );
-
-      needsRefresh =
-        Boolean(
-          status?.needsRefresh
-        );
-    }
-
-
-    if (
-      needsRefresh
-    ) {
-      summary.needsRefresh +=
-        1;
-    }
-  }
-
-
-  return summary;
-}
-
-
-/*
- * =====================================================
- * NORMALIZE DYNAMIC RESULT
- * =====================================================
- */
-
-function normalizeDynamicResult(
+function buildDynamicResult(
+  request,
   dynamicResult
 ) {
   const offers =
@@ -358,7 +917,13 @@ function normalizeDynamicResult(
     market:
       SPROUTS_MARKET,
 
+    request,
+
     offers,
+
+    winner:
+      offers[0] ||
+      null,
 
     retrieval: {
       source:
@@ -405,50 +970,68 @@ function normalizeDynamicResult(
 
 /*
  * =====================================================
- * MAIN SPROUTS RETRIEVAL
+ * MAIN RETRIEVAL
  * =====================================================
  */
 
 async function getSproutsOffers(
-  request
+  request,
+  suppliedEvidence = null
 ) {
 
   /*
-   * ---------------------------------------------
-   * STEP 1:
-   * Look for acceptable stored evidence.
-   * ---------------------------------------------
+   * STEP 1
+   *
+   * Load the evidence file and retrieve the records
+   * matching this exact canonical product.
    */
 
-  const evidenceRaw =
+  const rawCandidates =
     retrieveSproutsCandidates(
-      request
+      request,
+      suppliedEvidence
     );
+
+
+  /*
+   * STEP 2
+   *
+   * Normalize and validate those records.
+   */
+
+  const evidenceOffers =
+    buildSproutsEvidenceOffers(
+      request,
+      rawCandidates
+    );
+
 
   const evidenceResult =
-    buildEvidenceResult(
-      evidenceRaw
+    buildStoredEvidenceResult(
+      request,
+      rawCandidates,
+      evidenceOffers
     );
 
 
+  /*
+   * STEP 3
+   *
+   * Stored evidence won.
+   */
+
   if (
-    evidenceResult.offers.length
+    evidenceOffers.length
   ) {
     return evidenceResult;
   }
 
 
   /*
-   * ---------------------------------------------
-   * STEP 2:
-   * No valid stored evidence.
+   * STEP 4
    *
+   * No usable stored evidence.
    * Attempt dynamic fallback.
-   *
-   * At present, sprouts-dynamic.js intentionally
-   * has searchProvider = null, so this should fail
-   * safely instead of inventing a result.
-   * ---------------------------------------------
    */
 
   let dynamicResult;
@@ -462,7 +1045,6 @@ async function getSproutsOffers(
   } catch (
     error
   ) {
-
     return {
       ...evidenceResult,
 
@@ -506,36 +1088,42 @@ async function getSproutsOffers(
   }
 
 
+  /*
+   * STEP 5
+   *
+   * Normalize dynamic response.
+   */
+
   const dynamicNormalized =
-    normalizeDynamicResult(
+    buildDynamicResult(
+      request,
       dynamicResult
     );
 
 
   /*
-   * ---------------------------------------------
-   * STEP 3:
-   * If dynamic search produced acceptable offers,
-   * return those.
-   * ---------------------------------------------
+   * STEP 6
+   *
+   * If future dynamic search produces acceptable
+   * offers, return them.
    */
 
   if (
-    dynamicNormalized.offers.length
+    dynamicNormalized
+      .offers
+      .length
   ) {
     return dynamicNormalized;
   }
 
 
   /*
-   * ---------------------------------------------
-   * STEP 4:
-   * Neither evidence nor dynamic search produced
-   * an acceptable result.
+   * STEP 7
    *
-   * Preserve the original evidence response but
-   * expose dynamic-fallback status.
-   * ---------------------------------------------
+   * Nothing found.
+   *
+   * Return the evidence result and expose the fact
+   * that fallback was attempted but unavailable.
    */
 
   return {
@@ -565,7 +1153,7 @@ async function getSproutsOffers(
 
 /*
  * =====================================================
- * OPTIONAL STATUS HELPER
+ * STATUS HELPER
  * =====================================================
  */
 
@@ -583,59 +1171,54 @@ function buildSproutsStatus(
     result?.retrieval ||
     {};
 
-  const observedDates =
-    offers
-      .map(
-        offer =>
-          offer.observedAt ||
-          offer.source
-            ?.observedAt ||
-          null
-      )
-      .filter(Boolean);
-
   let newestObservedAt =
     null;
 
-
   for (
-    const observedAt of
-    observedDates
+    const offer of
+    offers
   ) {
-    const age =
-      calculateAgeDays(
+    const observedAt =
+      offer.observedAt ||
+      offer.source
+        ?.observedAt ||
+      null;
+
+    if (!observedAt) {
+      continue;
+    }
+
+    if (
+      !newestObservedAt
+    ) {
+      newestObservedAt =
+        observedAt;
+
+      continue;
+    }
+
+    const current =
+      parseObservedDate(
+        newestObservedAt
+      );
+
+    const candidate =
+      parseObservedDate(
         observedAt
       );
 
     if (
-      age === null
-    ) {
-      continue;
-    }
-
-    if (
-      newestObservedAt ===
-      null
-    ) {
-      newestObservedAt =
-        observedAt;
-      continue;
-    }
-
-    const currentAge =
-      calculateAgeDays(
-        newestObservedAt
-      );
-
-    if (
-      currentAge === null ||
-      age < currentAge
+      candidate &&
+      (
+        !current ||
+        candidate.getTime() >
+          current.getTime()
+      )
     ) {
       newestObservedAt =
         observedAt;
     }
   }
-
 
   return {
     retailer:
@@ -690,11 +1273,17 @@ function buildSproutsStatus(
 module.exports = {
   SPROUTS_MARKET,
 
-  sproutsEvidenceAdapter,
+  scoreConfidence,
 
   loadSproutsEvidence,
 
+  filterSproutsEvidence,
+
   retrieveSproutsCandidates,
+
+  normalizeSproutsEvidence,
+
+  buildSproutsEvidenceOffers,
 
   getSproutsOffers,
 
