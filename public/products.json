@@ -1,0 +1,302 @@
+[
+  {
+    "id": "ground-beef-organic-grassfed-85-15",
+    "label": "Organic grass-fed 85/15 ground beef",
+    "category": "Meat",
+    "queryName": "organic grass-fed 85/15 ground beef",
+    "defaultUnit": "lb",
+    "allowedUnits": ["lb", "oz"]
+  },
+  {
+    "id": "organic-chicken-breast",
+    "label": "Organic chicken breast",
+    "category": "Meat",
+    "queryName": "organic chicken breast",
+    "defaultUnit": "lb",
+    "allowedUnits": ["lb", "oz"]
+  },
+  {
+    "id": "organic-chicken-thighs",
+    "label": "Organic chicken thighs",
+    "category": "Meat",
+    "queryName": "organic chicken thighs",
+    "defaultUnit": "lb",
+    "allowedUnits": ["lb", "oz"]
+  },
+  {
+    "id": "organic-ground-turkey",
+    "label": "Organic ground turkey",
+    "category": "Meat",
+    "queryName": "organic ground turkey",
+    "defaultUnit": "lb",
+    "allowedUnits": ["lb", "oz"]
+  },
+  {
+    "id": "organic-eggs",
+    "label": "Organic eggs",
+    "category": "Dairy & Eggs",
+    "queryName": "organic eggs",
+    "defaultUnit": "dozen",
+    "allowedUnits": ["dozen", "each"]
+  },
+  {
+    "id": "whole-milk",
+    "label": "Whole milk",
+    "category": "Dairy & Eggs",
+    "queryName": "whole milk",
+    "defaultUnit": "gallon",
+    "allowedUnits": ["gallon", "quart", "fl oz"]
+  },
+  {
+    "id": "greek-yogurt",
+    "label": "Greek yogurt",
+    "category": "Dairy & Eggs",
+    "queryName": "greek yogurt",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "oz"]
+  },
+  {
+    "id": "cheddar-cheese",
+    "label": "Cheddar cheese",
+    "category": "Dairy & Eggs",
+    "queryName": "cheddar cheese",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "oz"]
+  },
+  {
+    "id": "organic-broccoli",
+    "label": "Organic broccoli",
+    "category": "Produce",
+    "queryName": "organic broccoli",
+    "defaultUnit": "each",
+    "allowedUnits": ["each"]
+  },
+  {
+    "id": "organic-cucumber",
+    "label": "Organic cucumber",
+    "category": "Produce",
+    "queryName": "organic cucumber",
+    "defaultUnit": "each",
+    "allowedUnits": ["each"]
+  },
+  {
+    "id": "organic-baby-carrots",
+    "label": "Organic baby carrots",
+    "category": "Produce",
+    "queryName": "organic baby carrots",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "oz", "lb"],
+    "packageEquivalent": {
+      "quantity": 16,
+      "unit": "oz"
+    }
+  },
+  {
+    "id": "organic-mango",
+    "label": "Organic mango",
+    "category": "Produce",
+    "queryName": "organic mango",
+    "defaultUnit": "each",
+    "allowedUnits": ["each"]
+  },
+  {
+    "id": "organic-bananas",
+    "label": "Organic bananas",
+    "category": "Produce",
+    "queryName": "organic bananas",
+    "defaultUnit": "lb",
+    "allowedUnits": ["lb", "each"]
+  },
+  {
+    "id": "organic-apples",
+    "label": "Organic apples",
+    "category": "Produce",
+    "queryName": "organic apples",
+    "defaultUnit": "each",
+    "allowedUnits": ["each", "lb"]
+  },
+  {
+    "id": "organic-avocado",
+    "label": "Organic avocado",
+    "category": "Produce",
+    "queryName": "organic avocado",
+    "defaultUnit": "each",
+    "allowedUnits": ["each"]
+  },
+  {
+    "id": "organic-blueberries",
+    "label": "Organic blueberries",
+    "category": "Produce",
+    "queryName": "organic blueberries",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "oz"]
+  },
+  {
+    "id": "organic-strawberries",
+    "label": "Organic strawberries",
+    "category": "Produce",
+    "queryName": "organic strawberries",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "lb", "oz"]
+  },
+  {
+    "id": "organic-spinach",
+    "label": "Organic spinach",
+    "category": "Produce",
+    "queryName": "organic spinach",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "oz"]
+  },
+  {
+    "id": "organic-spring-mix",
+    "label": "Organic spring mix",
+    "category": "Produce",
+    "queryName": "organic spring mix",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "oz"]
+  },
+  {
+    "id": "organic-sweet-potatoes",
+    "label": "Organic sweet potatoes",
+    "category": "Produce",
+    "queryName": "organic sweet potatoes",
+    "defaultUnit": "lb",
+    "allowedUnits": ["lb", "each"]
+  },
+  {
+    "id": "organic-onions",
+    "label": "Organic onions",
+    "category": "Produce",
+    "queryName": "organic onions",
+    "defaultUnit": "each",
+    "allowedUnits": ["each", "lb"]
+  },
+  {
+    "id": "organic-bell-peppers",
+    "label": "Organic bell peppers",
+    "category": "Produce",
+    "queryName": "organic bell peppers",
+    "defaultUnit": "each",
+    "allowedUnits": ["each", "package"]
+  },
+  {
+    "id": "organic-grapes",
+    "label": "Organic grapes",
+    "category": "Produce",
+    "queryName": "organic grapes",
+    "defaultUnit": "lb",
+    "allowedUnits": ["lb", "package"]
+  },
+  {
+    "id": "organic-lemons",
+    "label": "Organic lemons",
+    "category": "Produce",
+    "queryName": "organic lemons",
+    "defaultUnit": "each",
+    "allowedUnits": ["each"]
+  },
+  {
+    "id": "rolled-oats",
+    "label": "Rolled oats",
+    "category": "Pantry",
+    "queryName": "rolled oats",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "oz", "lb"]
+  },
+  {
+    "id": "brown-rice",
+    "label": "Brown rice",
+    "category": "Pantry",
+    "queryName": "brown rice",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "lb", "oz"]
+  },
+  {
+    "id": "quinoa",
+    "label": "Quinoa",
+    "category": "Pantry",
+    "queryName": "quinoa",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "lb", "oz"]
+  },
+  {
+    "id": "black-beans",
+    "label": "Black beans",
+    "category": "Pantry",
+    "queryName": "black beans",
+    "defaultUnit": "can",
+    "allowedUnits": ["can", "package"]
+  },
+  {
+    "id": "peanut-butter",
+    "label": "Peanut butter",
+    "category": "Pantry",
+    "queryName": "peanut butter",
+    "defaultUnit": "jar",
+    "allowedUnits": ["jar", "oz"]
+  },
+  {
+    "id": "olive-oil",
+    "label": "Extra virgin olive oil",
+    "category": "Pantry",
+    "queryName": "extra virgin olive oil",
+    "defaultUnit": "bottle",
+    "allowedUnits": ["bottle", "fl oz"]
+  },
+  {
+    "id": "whole-grain-bread",
+    "label": "Whole grain bread",
+    "category": "Bakery",
+    "queryName": "whole grain bread",
+    "defaultUnit": "loaf",
+    "allowedUnits": ["loaf", "package"]
+  },
+  {
+    "id": "coffee-whole-bean",
+    "label": "Whole bean coffee",
+    "category": "Beverages",
+    "queryName": "whole bean coffee",
+    "defaultUnit": "bag",
+    "allowedUnits": ["bag", "oz", "lb"]
+  },
+  {
+    "id": "sparkling-water",
+    "label": "Sparkling water",
+    "category": "Beverages",
+    "queryName": "sparkling water",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "can"]
+  },
+  {
+    "id": "paper-towels",
+    "label": "Paper towels",
+    "category": "Household",
+    "queryName": "paper towels",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "roll"]
+  },
+  {
+    "id": "toilet-paper",
+    "label": "Toilet paper",
+    "category": "Household",
+    "queryName": "toilet paper",
+    "defaultUnit": "package",
+    "allowedUnits": ["package", "roll"]
+  },
+  {
+    "id": "dish-soap",
+    "label": "Dish soap",
+    "category": "Household",
+    "queryName": "dish soap",
+    "defaultUnit": "bottle",
+    "allowedUnits": ["bottle", "fl oz"]
+  },
+  {
+    "id": "laundry-detergent",
+    "label": "Laundry detergent",
+    "category": "Household",
+    "queryName": "laundry detergent",
+    "defaultUnit": "bottle",
+    "allowedUnits": ["bottle", "fl oz"]
+  }
+]
