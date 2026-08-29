@@ -11,6 +11,7 @@
  * - surface research-needed products
  * - compare unchecked grocery items
  * - build Lowest Cost / Best Balance / One Store plans
+ * - show package, quantity, freshness and confidence detail
  */
 
 
@@ -39,109 +40,67 @@ const STOP_PENALTY = 5;
  */
 
 const productSelect =
-  document.getElementById(
-    "productSelect"
-  );
+  document.getElementById("productSelect");
 
 const quantitySelect =
-  document.getElementById(
-    "quantitySelect"
-  );
+  document.getElementById("quantitySelect");
 
 const unitSelect =
-  document.getElementById(
-    "unitSelect"
-  );
+  document.getElementById("unitSelect");
 
 const addItemButton =
-  document.getElementById(
-    "addItemButton"
-  );
+  document.getElementById("addItemButton");
 
 const resetListButton =
-  document.getElementById(
-    "resetListButton"
-  );
+  document.getElementById("resetListButton");
 
 const compareButton =
-  document.getElementById(
-    "compareButton"
-  );
+  document.getElementById("compareButton");
 
 const groceryList =
-  document.getElementById(
-    "groceryList"
-  );
+  document.getElementById("groceryList");
 
 const remainingItemCount =
-  document.getElementById(
-    "remainingItemCount"
-  );
+  document.getElementById("remainingItemCount");
 
 const statusSection =
-  document.getElementById(
-    "statusSection"
-  );
+  document.getElementById("statusSection");
 
 const status =
-  document.getElementById(
-    "status"
-  );
+  document.getElementById("status");
 
 const resultsSection =
-  document.getElementById(
-    "resultsSection"
-  );
+  document.getElementById("resultsSection");
 
 const results =
-  document.getElementById(
-    "results"
-  );
+  document.getElementById("results");
 
 const openCustomProductButton =
-  document.getElementById(
-    "openCustomProductButton"
-  );
+  document.getElementById("openCustomProductButton");
 
 const closeCustomProductButton =
-  document.getElementById(
-    "closeCustomProductButton"
-  );
+  document.getElementById("closeCustomProductButton");
 
 const customProductPanel =
-  document.getElementById(
-    "customProductPanel"
-  );
+  document.getElementById("customProductPanel");
 
 const customProductName =
-  document.getElementById(
-    "customProductName"
-  );
+  document.getElementById("customProductName");
 
 const customProductCategory =
-  document.getElementById(
-    "customProductCategory"
-  );
+  document.getElementById("customProductCategory");
 
 const customProductDefaultUnit =
-  document.getElementById(
-    "customProductDefaultUnit"
-  );
+  document.getElementById("customProductDefaultUnit");
 
 const saveCustomProductButton =
-  document.getElementById(
-    "saveCustomProductButton"
-  );
+  document.getElementById("saveCustomProductButton");
 
 const groceryItemTemplate =
-  document.getElementById(
-    "groceryItemTemplate"
-  );
+  document.getElementById("groceryItemTemplate");
 
 const optimizationCardTemplate =
-  document.getElementById(
-    "optimizationCardTemplate"
-  );
+  document.getElementById("optimizationCardTemplate");
 
 
 /*
@@ -185,17 +144,13 @@ function loadStorage(
 ) {
   try {
     const raw =
-      localStorage.getItem(
-        key
-      );
+      localStorage.getItem(key);
 
     if (!raw) {
       return fallback;
     }
 
-    return JSON.parse(
-      raw
-    );
+    return JSON.parse(raw);
   } catch {
     return fallback;
   }
@@ -208,9 +163,7 @@ function saveStorage(
 ) {
   localStorage.setItem(
     key,
-    JSON.stringify(
-      value
-    )
+    JSON.stringify(value)
   );
 }
 
@@ -245,44 +198,23 @@ function savePricingStatus() {
  * =====================================================
  */
 
-function cleanText(
-  value
-) {
-  return String(
-    value || ""
-  )
+function cleanText(value) {
+  return String(value || "")
     .trim()
-    .replace(
-      /\s+/g,
-      " "
-    );
+    .replace(/\s+/g, " ");
 }
 
 
-function slugify(
-  value
-) {
-  return cleanText(
-    value
-  )
+function slugify(value) {
+  return cleanText(value)
     .toLowerCase()
-    .replace(
-      /[^a-z0-9]+/g,
-      "-"
-    )
-    .replace(
-      /^-+|-+$/g,
-      ""
-    );
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 
-function titleCase(
-  value
-) {
-  return cleanText(
-    value
-  ).replace(
+function titleCase(value) {
+  return cleanText(value).replace(
     /\b\w/g,
     letter =>
       letter.toUpperCase()
@@ -290,16 +222,12 @@ function titleCase(
 }
 
 
-function money(
-  value
-) {
+function money(value) {
   const number =
     Number(value);
 
   if (
-    !Number.isFinite(
-      number
-    )
+    !Number.isFinite(number)
   ) {
     return "—";
   }
@@ -314,16 +242,53 @@ function money(
 }
 
 
-function unitLabel(
-  unit
-) {
-  if (
-    unit === "fl_oz"
-  ) {
+function unitLabel(unit) {
+  if (unit === "fl_oz") {
     return "fl oz";
   }
 
   return unit || "";
+}
+
+
+function prettyFreshness(value) {
+  if (!value) {
+    return null;
+  }
+
+  const map = {
+    current: "Current price",
+    aging: "Price aging",
+    stale: "Price stale",
+    unknown: "Price date unknown"
+  };
+
+  return (
+    map[value] ||
+    titleCase(value)
+  );
+}
+
+
+function confidenceLabel(score) {
+  const number =
+    Number(score);
+
+  if (
+    !Number.isFinite(number)
+  ) {
+    return null;
+  }
+
+  if (number >= 90) {
+    return `High confidence ${Math.round(number)}%`;
+  }
+
+  if (number >= 70) {
+    return `Good confidence ${Math.round(number)}%`;
+  }
+
+  return `Confidence ${Math.round(number)}%`;
 }
 
 
@@ -354,9 +319,7 @@ function normalizeProduct(
 
   const id =
     product.id ||
-    `custom-${slugify(
-      label
-    )}`;
+    `custom-${slugify(label)}`;
 
   return {
     id,
@@ -379,9 +342,7 @@ function normalizeProduct(
       ) &&
       product.allowedUnits.length
         ? product.allowedUnits
-        : [
-            defaultUnit
-          ],
+        : [defaultUnit],
 
     custom:
       Boolean(
@@ -426,9 +387,7 @@ function rebuildCatalog() {
     ]
   ) {
     if (
-      !map.has(
-        product.id
-      )
+      !map.has(product.id)
     ) {
       map.set(
         product.id,
@@ -438,9 +397,7 @@ function rebuildCatalog() {
   }
 
   catalog =
-    [
-      ...map.values()
-    ];
+    [...map.values()];
 
   populateProductDropdown();
 }
@@ -458,8 +415,7 @@ async function loadProducts() {
       await fetch(
         "/products.json",
         {
-          cache:
-            "no-store"
+          cache: "no-store"
         }
       );
 
@@ -473,18 +429,12 @@ async function loadProducts() {
       await response.json();
 
     baseProducts =
-      Array.isArray(
-        data
-      )
+      Array.isArray(data)
         ? data
         : [];
 
-  } catch (
-    error
-  ) {
-    console.error(
-      error
-    );
+  } catch (error) {
+    console.error(error);
 
     baseProducts = [];
   }
@@ -508,16 +458,14 @@ function populateProductDropdown() {
   const selected =
     productSelect.value;
 
-  productSelect.innerHTML =
-    "";
+  productSelect.innerHTML = "";
 
   const placeholder =
     document.createElement(
       "option"
     );
 
-  placeholder.value =
-    "";
+  placeholder.value = "";
 
   placeholder.textContent =
     "Select a product";
@@ -538,9 +486,7 @@ function populateProductDropdown() {
       "Other";
 
     if (
-      !groups.has(
-        category
-      )
+      !groups.has(category)
     ) {
       groups.set(
         category,
@@ -554,9 +500,7 @@ function populateProductDropdown() {
   }
 
   const sortedCategories =
-    [
-      ...groups.keys()
-    ].sort();
+    [...groups.keys()].sort();
 
   for (
     const category of
@@ -649,11 +593,18 @@ function populateQuantityDropdown() {
     10,
     12,
     16,
-    20
+    20,
+    24,
+    30,
+    36,
+    40,
+    50,
+    60,
+    75,
+    100
   ];
 
-  quantitySelect.innerHTML =
-    "";
+  quantitySelect.innerHTML = "";
 
   for (
     const value of
@@ -686,9 +637,7 @@ function populateQuantityDropdown() {
  * =====================================================
  */
 
-function getProductById(
-  id
-) {
+function getProductById(id) {
   return (
     catalog.find(
       product =>
@@ -720,8 +669,7 @@ function syncUnitDropdown() {
   const product =
     currentSelectedProduct();
 
-  unitSelect.innerHTML =
-    "";
+  unitSelect.innerHTML = "";
 
   const units =
     product?.allowedUnits?.length
@@ -744,9 +692,7 @@ function syncUnitDropdown() {
       unit;
 
     option.textContent =
-      unitLabel(
-        unit
-      );
+      unitLabel(unit);
 
     unitSelect.appendChild(
       option
@@ -777,9 +723,7 @@ function openCustomProductPanel() {
     false;
 
   customProductPanel.classList
-    .remove(
-      "hidden"
-    );
+    .remove("hidden");
 
   requestAnimationFrame(
     () => {
@@ -799,9 +743,7 @@ function closeCustomProductPanel() {
     true;
 
   customProductPanel.classList
-    .add(
-      "hidden"
-    );
+    .add("hidden");
 }
 
 
@@ -832,9 +774,7 @@ async function saveCustomProduct() {
     "each";
 
   const id =
-    `custom-${slugify(
-      rawName
-    )}`;
+    `custom-${slugify(rawName)}`;
 
   const duplicate =
     catalog.find(
@@ -864,9 +804,7 @@ async function saveCustomProduct() {
     id,
 
     label:
-      titleCase(
-        rawName
-      ),
+      titleCase(rawName),
 
     queryName:
       rawName,
@@ -880,9 +818,7 @@ async function saveCustomProduct() {
       unit,
 
     allowedUnits:
-      [
-        unit
-      ],
+      [unit],
 
     custom:
       true
@@ -919,12 +855,6 @@ async function saveCustomProduct() {
     1,
     unit
   );
-
-  /*
-   * New:
-   * Tell the refresh system about all browser-saved
-   * custom products.
-   */
 
   await refreshCustomProductResearch();
 }
@@ -1035,9 +965,7 @@ async function addSelectedItem() {
  * =====================================================
  */
 
-function inferPricingStatus(
-  data
-) {
+function inferPricingStatus(data) {
   const retailerNames =
     Array.isArray(
       data?.results
@@ -1055,12 +983,10 @@ function inferPricingStatus(
       : [];
 
   if (
-    retailerNames.length >=
-    2
+    retailerNames.length >= 2
   ) {
     return {
-      status:
-        "available",
+      status: "available",
 
       label:
         "Pricing available",
@@ -1071,12 +997,10 @@ function inferPricingStatus(
   }
 
   if (
-    retailerNames.length ===
-    1
+    retailerNames.length === 1
   ) {
     return {
-      status:
-        "partial",
+      status: "partial",
 
       label:
         "Partial pricing",
@@ -1087,14 +1011,12 @@ function inferPricingStatus(
   }
 
   return {
-    status:
-      "research",
+    status: "research",
 
     label:
       "Research needed",
 
-    retailers:
-      []
+    retailers: []
   };
 }
 
@@ -1132,9 +1054,7 @@ async function checkProductPricing(
       await response.json();
 
     const inferred =
-      inferPricingStatus(
-        data
-      );
+      inferPricingStatus(data);
 
     pricingStatus[
       product.id
@@ -1152,9 +1072,7 @@ async function checkProductPricing(
 
     return inferred;
 
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.error(
       "Pricing check failed:",
       error
@@ -1169,8 +1087,7 @@ async function checkProductPricing(
       label:
         "Research needed",
 
-      retailers:
-        [],
+      retailers: [],
 
       checkedAt:
         new Date()
@@ -1192,7 +1109,7 @@ async function checkProductPricing(
 
 /*
  * =====================================================
- * NEW: CUSTOM PRODUCT RESEARCH REFRESH
+ * CUSTOM PRODUCT RESEARCH REFRESH
  * =====================================================
  */
 
@@ -1236,9 +1153,7 @@ async function refreshCustomProductResearch() {
 
     return data;
 
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.error(
       "Custom evidence refresh failed:",
       error
@@ -1251,7 +1166,7 @@ async function refreshCustomProductResearch() {
 
 /*
  * =====================================================
- * USE REFRESH PLAN TO IMPROVE STATUS
+ * USE REFRESH PLAN
  * =====================================================
  */
 
@@ -1260,11 +1175,8 @@ function updatePricingFromRefreshPlan(
 ) {
   const retailerPlans =
     [
-      data?.retailers
-        ?.sprouts,
-
-      data?.retailers
-        ?.earthFare
+      data?.retailers?.sprouts,
+      data?.retailers?.earthFare
     ]
       .filter(Boolean);
 
@@ -1295,11 +1207,6 @@ function updatePricingFromRefreshPlan(
       }
     }
 
-    /*
-     * Only set Research Needed when we don't already
-     * have actual compare pricing.
-     */
-
     const existing =
       pricingStatus[
         product.id
@@ -1322,8 +1229,7 @@ function updatePricingFromRefreshPlan(
         label:
           "Research needed",
 
-        retailers:
-          [],
+        retailers: [],
 
         researchRetailers,
 
@@ -1342,7 +1248,7 @@ function updatePricingFromRefreshPlan(
 
 /*
  * =====================================================
- * MIRROR CUSTOM ID NORMALIZATION USED BY BACKEND
+ * CUSTOM ID NORMALIZATION
  * =====================================================
  */
 
@@ -1367,39 +1273,20 @@ const MASS_OR_UNCHANGED_WORDS =
 
 
 const IRREGULAR_PLURALS = {
-  potato:
-    "potatoes",
-
-  tomato:
-    "tomatoes",
-
-  berry:
-    "berries",
-
-  cherry:
-    "cherries",
-
-  strawberry:
-    "strawberries",
-
-  blueberry:
-    "blueberries",
-
-  raspberry:
-    "raspberries",
-
-  cranberry:
-    "cranberries"
+  potato: "potatoes",
+  tomato: "tomatoes",
+  berry: "berries",
+  cherry: "cherries",
+  strawberry: "strawberries",
+  blueberry: "blueberries",
+  raspberry: "raspberries",
+  cranberry: "cranberries"
 };
 
 
-function pluralizeCustomWord(
-  word
-) {
+function pluralizeCustomWord(word) {
   const value =
-    cleanText(
-      word
-    )
+    cleanText(word)
       .toLowerCase();
 
   if (!value) {
@@ -1414,24 +1301,16 @@ function pluralizeCustomWord(
   }
 
   if (
-    IRREGULAR_PLURALS[
-      value
-    ]
+    IRREGULAR_PLURALS[value]
   ) {
     return (
-      IRREGULAR_PLURALS[
-        value
-      ]
+      IRREGULAR_PLURALS[value]
     );
   }
 
   if (
-    value.endsWith(
-      "ies"
-    ) ||
-    value.endsWith(
-      "oes"
-    )
+    value.endsWith("ies") ||
+    value.endsWith("oes")
   ) {
     return value;
   }
@@ -1444,15 +1323,10 @@ function pluralizeCustomWord(
   }
 
   if (
-    /[^aeiou]y$/.test(
-      value
-    )
+    /[^aeiou]y$/.test(value)
   ) {
     return (
-      value.slice(
-        0,
-        -1
-      ) +
+      value.slice(0, -1) +
       "ies"
     );
   }
@@ -1484,9 +1358,7 @@ function normalizeCustomRefreshId(
     "";
 
   const words =
-    cleanText(
-      rawName
-    )
+    cleanText(rawName)
       .toLowerCase()
       .split(/\s+/)
       .filter(Boolean);
@@ -1539,9 +1411,7 @@ function pricingLabelForProduct(
     return (
       pricing.retailers
         ?.length
-        ? `Pricing available: ${pricing.retailers.join(
-            ", "
-          )}`
+        ? `Pricing available: ${pricing.retailers.join(", ")}`
         : "Pricing available"
     );
   }
@@ -1553,9 +1423,7 @@ function pricingLabelForProduct(
     return (
       pricing.retailers
         ?.length
-        ? `Partial pricing: ${pricing.retailers.join(
-            ", "
-          )}`
+        ? `Partial pricing: ${pricing.retailers.join(", ")}`
         : "Partial pricing"
     );
   }
@@ -1571,8 +1439,7 @@ function renderWeeklyList() {
     return;
   }
 
-  groceryList.innerHTML =
-    "";
+  groceryList.innerHTML = "";
 
   if (!weeklyList.length) {
     const empty =
@@ -1602,9 +1469,7 @@ function renderWeeklyList() {
     const fragment =
       groceryItemTemplate
         ?.content
-        ?.cloneNode(
-          true
-        );
+        ?.cloneNode(true);
 
     if (!fragment) {
       continue;
@@ -1635,20 +1500,14 @@ function renderWeeklyList() {
         ".grocery-remove"
       );
 
-    if (
-      productName
-    ) {
+    if (productName) {
       productName.textContent =
         item.label;
     }
 
-    if (
-      checkbox
-    ) {
+    if (checkbox) {
       checkbox.checked =
-        Boolean(
-          item.checked
-        );
+        Boolean(item.checked);
 
       checkbox.addEventListener(
         "change",
@@ -1672,9 +1531,7 @@ function renderWeeklyList() {
       );
     }
 
-    if (
-      meta
-    ) {
+    if (meta) {
       meta.textContent =
         [
           `${item.quantity} ${unitLabel(
@@ -1686,14 +1543,10 @@ function renderWeeklyList() {
           )
         ]
           .filter(Boolean)
-          .join(
-            " · "
-          );
+          .join(" · ");
     }
 
-    if (
-      remove
-    ) {
+    if (remove) {
       remove.addEventListener(
         "click",
         () => {
@@ -1719,14 +1572,11 @@ function renderWeeklyList() {
  * =====================================================
  */
 
-function removeWeeklyItem(
-  itemId
-) {
+function removeWeeklyItem(itemId) {
   weeklyList =
     weeklyList.filter(
       item =>
-        item.id !==
-        itemId
+        item.id !== itemId
     );
 
   saveWeeklyList();
@@ -1740,8 +1590,7 @@ function resetWeeklyList() {
     weeklyList.map(
       item => ({
         ...item,
-        checked:
-          false
+        checked: false
       })
     );
 
@@ -1762,9 +1611,7 @@ function resetWeeklyList() {
  */
 
 function updateRemainingCount() {
-  if (
-    !remainingItemCount
-  ) {
+  if (!remainingItemCount) {
     return;
   }
 
@@ -1790,18 +1637,14 @@ function updateRemainingCount() {
  */
 
 function hideStatus() {
-  if (
-    statusSection
-  ) {
+  if (statusSection) {
     statusSection.hidden =
       true;
   }
 }
 
 
-function showStatus(
-  message
-) {
+function showStatus(message) {
   if (
     !statusSection ||
     !status
@@ -1819,7 +1662,7 @@ function showStatus(
 
 /*
  * =====================================================
- * COMPARE QUERY
+ * COMPARE
  * =====================================================
  */
 
@@ -1833,9 +1676,7 @@ function buildCompareQuery(
 }
 
 
-async function compareItem(
-  item
-) {
+async function compareItem(item) {
   const product =
     getProductById(
       item.productId
@@ -1926,11 +1767,8 @@ async function compareItem(
 
   return {
     item,
-
     product,
-
     data,
-
     results:
       normalizedResults
   };
@@ -1939,15 +1777,14 @@ async function compareItem(
 
 /*
  * =====================================================
- * LOWEST COST PLAN
+ * LOWEST COST
  * =====================================================
  */
 
 function buildLowestCostPlan(
   comparisons
 ) {
-  const selections =
-    [];
+  const selections = [];
 
   for (
     const comparison of
@@ -2018,40 +1855,31 @@ function buildLowestCostPlan(
 
 /*
  * =====================================================
- * STORE COMBINATIONS
+ * COMBINATIONS
  * =====================================================
  */
 
-function combinations(
-  array
-) {
-  const result =
-    [];
+function combinations(array) {
+  const result = [];
 
   const total =
-    1 <<
-    array.length;
+    1 << array.length;
 
   for (
     let mask = 1;
     mask < total;
     mask++
   ) {
-    const subset =
-      [];
+    const subset = [];
 
     for (
       let index = 0;
-      index <
-      array.length;
+      index < array.length;
       index++
     ) {
       if (
         mask &
-        (
-          1 <<
-          index
-        )
+        (1 << index)
       ) {
         subset.push(
           array[index]
@@ -2090,26 +1918,20 @@ function buildBestBalancePlan(
       )
     ];
 
-  if (
-    !retailers.length
-  ) {
+  if (!retailers.length) {
     return null;
   }
 
   const subsets =
-    combinations(
-      retailers
-    );
+    combinations(retailers);
 
-  let best =
-    null;
+  let best = null;
 
   for (
     const subset of
     subsets
   ) {
-    const selections =
-      [];
+    const selections = [];
 
     let incomplete =
       false;
@@ -2132,9 +1954,7 @@ function buildBestBalancePlan(
               b.cost
           );
 
-      if (
-        !options.length
-      ) {
+      if (!options.length) {
         incomplete =
           true;
 
@@ -2186,8 +2006,7 @@ function buildBestBalancePlan(
     const penalty =
       Math.max(
         0,
-        usedStores.length -
-        1
+        usedStores.length - 1
       ) *
       STOP_PENALTY;
 
@@ -2197,8 +2016,7 @@ function buildBestBalancePlan(
 
     if (
       !best ||
-      score <
-        best.score
+      score < best.score
     ) {
       best = {
         label:
@@ -2256,9 +2074,7 @@ function buildOneStorePlan(
       }
 
       retailerMap
-        .get(
-          result.retailer
-        )
+        .get(result.retailer)
         .push({
           comparison,
           result
@@ -2266,15 +2082,13 @@ function buildOneStorePlan(
     }
   }
 
-  let best =
-    null;
+  let best = null;
 
   for (
     const [
       retailer,
       entries
-    ] of
-    retailerMap
+    ] of retailerMap
   ) {
     const coveredItems =
       new Set(
@@ -2285,8 +2099,7 @@ function buildOneStorePlan(
         )
       );
 
-    const selections =
-      [];
+    const selections = [];
 
     for (
       const comparison of
@@ -2347,9 +2160,7 @@ function buildOneStorePlan(
       selections,
 
       stores:
-        [
-          retailer
-        ]
+        [retailer]
     };
 
     if (
@@ -2374,13 +2185,170 @@ function buildOneStorePlan(
 
 /*
  * =====================================================
+ * PACKAGE DETAIL
+ * =====================================================
+ */
+
+function getPrimaryPackage(
+  result
+) {
+  if (
+    Array.isArray(
+      result?.packages
+    ) &&
+    result.packages.length
+  ) {
+    return result.packages[0];
+  }
+
+  return null;
+}
+
+
+function packageDetailText(
+  result
+) {
+  const packageInfo =
+    getPrimaryPackage(
+      result
+    );
+
+  const parts = [];
+
+  const packagesNeeded =
+    Number(
+      packageInfo
+        ?.packagesNeeded ||
+      result?.purchasePlan
+        ?.packagesNeeded ||
+      result?.packages?.length ||
+      0
+    );
+
+  if (
+    Number.isFinite(
+      packagesNeeded
+    ) &&
+    packagesNeeded > 0
+  ) {
+    parts.push(
+      `${packagesNeeded} ${
+        packagesNeeded === 1
+          ? "package"
+          : "packages"
+      }`
+    );
+  }
+
+  if (
+    packageInfo?.size
+  ) {
+    parts.push(
+      packageInfo.size
+    );
+  } else if (
+    packageInfo?.packageQty &&
+    packageInfo?.packageUnit
+  ) {
+    parts.push(
+      `${packageInfo.packageQty} ${unitLabel(
+        packageInfo.packageUnit
+      )}`
+    );
+  }
+
+  const supplied =
+    Number(
+      result?.normalized
+        ?.suppliedQty
+    );
+
+  const suppliedUnit =
+    result?.normalized?.unit;
+
+  if (
+    Number.isFinite(supplied) &&
+    suppliedUnit
+  ) {
+    parts.push(
+      `${supplied} ${unitLabel(
+        suppliedUnit
+      )} supplied`
+    );
+  }
+
+  return parts.join(" · ");
+}
+
+
+function evidenceDetailText(
+  result
+) {
+  const parts = [];
+
+  const freshness =
+    prettyFreshness(
+      result?.freshness
+    );
+
+  if (freshness) {
+    parts.push(
+      freshness
+    );
+  }
+
+  if (
+    Number.isFinite(
+      Number(
+        result?.ageDays
+      )
+    )
+  ) {
+    const days =
+      Number(result.ageDays);
+
+    parts.push(
+      days === 0
+        ? "Observed today"
+        : `${days} ${
+            days === 1
+              ? "day"
+              : "days"
+          } old`
+    );
+  }
+
+  const confidence =
+    confidenceLabel(
+      result?.confidenceScore
+    );
+
+  if (confidence) {
+    parts.push(
+      confidence
+    );
+  }
+
+  if (
+    result?.dataMode ===
+    "live"
+  ) {
+    parts.unshift(
+      "Live retailer data"
+    );
+  }
+
+  return parts.join(" · ");
+}
+
+
+/*
+ * =====================================================
  * RESULTS DISPLAY
  * =====================================================
  */
 
-function renderPlan(
-  plan
-) {
+function renderPlan(plan) {
   if (
     !plan ||
     !optimizationCardTemplate
@@ -2391,9 +2359,7 @@ function renderPlan(
   const fragment =
     optimizationCardTemplate
       .content
-      .cloneNode(
-        true
-      );
+      .cloneNode(true);
 
   const label =
     fragment.querySelector(
@@ -2432,21 +2398,17 @@ function renderPlan(
 
   if (total) {
     total.textContent =
-      money(
-        plan.total
-      );
+      money(plan.total);
   }
 
   if (meta) {
     meta.textContent =
       `${plan.selections.length} ${
-        plan.selections.length ===
-        1
+        plan.selections.length === 1
           ? "item"
           : "items"
       } · ${plan.stores.length} ${
-        plan.stores.length ===
-        1
+        plan.stores.length === 1
           ? "store"
           : "stores"
       }`;
@@ -2465,9 +2427,21 @@ function renderPlan(
       row.className =
         "optimization-store-row";
 
+      /*
+       * Product / package information
+       */
+
+      const itemWrap =
+        document.createElement(
+          "div"
+        );
+
+      itemWrap.style.minWidth =
+        "0";
+
       const item =
         document.createElement(
-          "span"
+          "div"
         );
 
       item.className =
@@ -2476,9 +2450,44 @@ function renderPlan(
       item.textContent =
         selection.item.label;
 
+      itemWrap.appendChild(
+        item
+      );
+
+      const packageDetail =
+        packageDetailText(
+          selection.result
+        );
+
+      if (packageDetail) {
+        const detail =
+          document.createElement(
+            "div"
+          );
+
+        detail.style.marginTop =
+          "3px";
+
+        detail.style.fontSize =
+          "0.72rem";
+
+        detail.style.lineHeight =
+          "1.35";
+
+        detail.style.color =
+          "var(--muted)";
+
+        detail.textContent =
+          packageDetail;
+
+        itemWrap.appendChild(
+          detail
+        );
+      }
+
       const retailer =
         document.createElement(
-          "span"
+          "div"
         );
 
       retailer.className =
@@ -2486,6 +2495,40 @@ function renderPlan(
 
       retailer.textContent =
         selection.retailer;
+
+      const evidence =
+        evidenceDetailText(
+          selection.result
+        );
+
+      if (evidence) {
+        const evidenceText =
+          document.createElement(
+            "div"
+          );
+
+        evidenceText.style.marginTop =
+          "3px";
+
+        evidenceText.style.maxWidth =
+          "160px";
+
+        evidenceText.style.fontSize =
+          "0.68rem";
+
+        evidenceText.style.lineHeight =
+          "1.35";
+
+        evidenceText.style.color =
+          "var(--muted-light)";
+
+        evidenceText.textContent =
+          evidence;
+
+        retailer.appendChild(
+          evidenceText
+        );
+      }
 
       const price =
         document.createElement(
@@ -2501,7 +2544,7 @@ function renderPlan(
         );
 
       row.append(
-        item,
+        itemWrap,
         retailer,
         price
       );
@@ -2551,17 +2594,11 @@ async function compareWeeklyList() {
   );
 
   try {
-    /*
-     * Refresh research state before comparing.
-     */
-
     await refreshCustomProductResearch();
 
     const comparisons =
       await Promise.all(
-        items.map(
-          compareItem
-        )
+        items.map(compareItem)
       );
 
     savePricingStatus();
@@ -2582,12 +2619,9 @@ async function compareWeeklyList() {
             .length
       );
 
-    results.innerHTML =
-      "";
+    results.innerHTML = "";
 
-    if (
-      !withResults.length
-    ) {
+    if (!withResults.length) {
       resultsSection.hidden =
         true;
 
@@ -2613,17 +2647,11 @@ async function compareWeeklyList() {
         withResults
       );
 
-    renderPlan(
-      lowest
-    );
+    renderPlan(lowest);
 
-    renderPlan(
-      balanced
-    );
+    renderPlan(balanced);
 
-    renderPlan(
-      oneStore
-    );
+    renderPlan(oneStore);
 
     resultsSection.hidden =
       false;
@@ -2645,12 +2673,8 @@ async function compareWeeklyList() {
       );
     }
 
-  } catch (
-    error
-  ) {
-    console.error(
-      error
-    );
+  } catch (error) {
+    console.error(error);
 
     showStatus(
       "Something went wrong while comparing prices. Please try again."
@@ -2723,8 +2747,7 @@ customProductName
     "keydown",
     event => {
       if (
-        event.key ===
-        "Enter"
+        event.key === "Enter"
       ) {
         event.preventDefault();
 
@@ -2743,9 +2766,7 @@ customProductName
 async function initialize() {
   hideStatus();
 
-  if (
-    resultsSection
-  ) {
+  if (resultsSection) {
     resultsSection.hidden =
       true;
   }
@@ -2753,14 +2774,6 @@ async function initialize() {
   populateQuantityDropdown();
 
   await loadProducts();
-
-  /*
-   * Send any custom products already saved in the
-   * browser into the refresh planner immediately.
-   *
-   * This does not scrape or search retailer sites.
-   * It simply lets the backend know those products exist.
-   */
 
   if (
     customProducts.length
