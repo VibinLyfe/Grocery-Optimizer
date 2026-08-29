@@ -4,7 +4,7 @@
     "retailer": "Sprouts",
     "title": "Organic Murasaki Sweet Potato Bag",
     "brand": null,
-    "description": "Organic Murasaki Sweet Potato Bag",
+    "description": "Organic Japanese Sweet Potato Bag",
     "size": "3 lb",
     "price": 8.99,
     "productId": "73667163",
@@ -21,50 +21,65 @@
   {
     "canonicalId": "ground-beef-organic-grassfed-85-15",
     "retailer": "Sprouts",
-    "title": "Goodness Grazecious Organic Grass-Fed 85% Lean Fresh Ground Beef",
+    "title": "Goodness Grazecious Organic Grass Fed Ground Beef 85/15",
     "brand": "Goodness Grazecious",
-    "description": "Organic grass-fed 85% lean fresh ground beef",
-    "size": "16 oz",
-    "price": 9.99,
-    "productId": "25347199",
-    "market": "Knoxville, TN",
-    "locationConfirmed": false,
-    "marketConfirmed": true,
-    "sourceType": "retailer-product-page",
-    "sourceUrl": null,
-    "observedAt": "2026-08-29"
-  },
-  {
-    "canonicalId": "ground-beef-organic-grassfed-85-15",
-    "retailer": "Sprouts",
-    "title": "Goodness Grazecious Organic Grass-Fed 85% Lean Fresh Ground Beef Value Pack",
-    "brand": "Goodness Grazecious",
-    "description": "Organic grass-fed 85% lean fresh ground beef value pack",
-    "size": "3 lb",
-    "price": 28.47,
-    "productId": "41909480",
-    "market": "Knoxville, TN",
-    "locationConfirmed": false,
-    "marketConfirmed": true,
-    "sourceType": "retailer-product-page",
-    "sourceUrl": null,
-    "observedAt": "2026-08-29"
-  },
-  {
-    "canonicalId": "ground-beef-organic-grassfed-85-15",
-    "retailer": "Sprouts",
-    "title": "Thomas Farms Organic 85% Lean Grass Fed Ground Beef",
-    "brand": "Thomas Farms",
-    "description": "Organic 85% lean / 15% fat grass-fed ground beef",
+    "description": "Organic grass-fed 85/15 ground beef",
     "size": "1 lb",
     "price": 9.99,
-    "productId": "17292601",
+    "productId": null,
     "market": "Knoxville, TN",
-    "locationConfirmed": false,
+    "locationConfirmed": true,
     "marketConfirmed": true,
-    "sourceType": "retailer-product-page",
+    "sourceType": "public-product-record",
     "sourceUrl": null,
-    "observedAt": "2026-08-29"
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true,
+      "grassFed": true,
+      "lean85_15": true
+    }
+  },
+  {
+    "canonicalId": "ground-beef-organic-grassfed-85-15",
+    "retailer": "Sprouts",
+    "title": "Goodness Grazecious Organic Grass Fed Ground Beef 85/15 Value Pack",
+    "brand": "Goodness Grazecious",
+    "description": "Organic grass-fed 85/15 ground beef value pack",
+    "size": "3 lb",
+    "price": 28.47,
+    "productId": null,
+    "market": "Knoxville, TN",
+    "locationConfirmed": true,
+    "marketConfirmed": true,
+    "sourceType": "public-product-record",
+    "sourceUrl": null,
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true,
+      "grassFed": true,
+      "lean85_15": true
+    }
+  },
+  {
+    "canonicalId": "ground-beef-organic-grassfed-85-15",
+    "retailer": "Sprouts",
+    "title": "Thomas Farms Organic Grass Fed Ground Beef 85/15",
+    "brand": "Thomas Farms",
+    "description": "Organic grass-fed 85/15 ground beef",
+    "size": "1 lb",
+    "price": 9.99,
+    "productId": null,
+    "market": "Knoxville, TN",
+    "locationConfirmed": true,
+    "marketConfirmed": true,
+    "sourceType": "public-product-record",
+    "sourceUrl": null,
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true,
+      "grassFed": true,
+      "lean85_15": true
+    }
   },
   {
     "canonicalId": "mango",
@@ -74,13 +89,16 @@
     "description": "Fresh organic yellow mango",
     "size": "1 each",
     "price": 1.5,
-    "productId": "16616965",
+    "productId": null,
     "market": "Knoxville, TN",
-    "locationConfirmed": false,
+    "locationConfirmed": true,
     "marketConfirmed": true,
-    "sourceType": "retailer-product-page",
+    "sourceType": "public-product-record",
     "sourceUrl": null,
-    "observedAt": "2026-08-29"
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
   },
   {
     "canonicalId": "mango",
@@ -90,29 +108,35 @@
     "description": "Fresh red mango",
     "size": "1 each",
     "price": 2.5,
-    "productId": "16614422",
+    "productId": null,
     "market": "Knoxville, TN",
-    "locationConfirmed": false,
+    "locationConfirmed": true,
     "marketConfirmed": true,
-    "sourceType": "retailer-product-page",
+    "sourceType": "public-product-record",
     "sourceUrl": null,
-    "observedAt": "2026-08-29"
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": false
+    }
   },
   {
     "canonicalId": "organic-baby-carrots",
     "retailer": "Sprouts",
-    "title": "Organic Baby Carrots Bag",
+    "title": "Organic Baby Carrots",
     "brand": null,
-    "description": "Organic baby carrots",
+    "description": "Fresh organic baby carrots",
     "size": "1 lb",
     "price": 1.99,
-    "productId": "16523917",
+    "productId": null,
     "market": "Knoxville, TN",
-    "locationConfirmed": false,
+    "locationConfirmed": true,
     "marketConfirmed": true,
-    "sourceType": "retailer-product-page",
+    "sourceType": "public-product-record",
     "sourceUrl": null,
-    "observedAt": "2026-08-29"
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
   },
   {
     "canonicalId": "organic-broccoli",
@@ -122,13 +146,16 @@
     "description": "Fresh organic broccoli",
     "size": "1.12 lb",
     "price": 3.91,
-    "productId": "16702282",
+    "productId": null,
     "market": "Knoxville, TN",
-    "locationConfirmed": false,
+    "locationConfirmed": true,
     "marketConfirmed": true,
-    "sourceType": "retailer-product-page",
+    "sourceType": "public-product-record",
     "sourceUrl": null,
-    "observedAt": "2026-08-29"
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
   },
   {
     "canonicalId": "organic-cucumber",
@@ -138,28 +165,104 @@
     "description": "Fresh organic cucumber",
     "size": "1 each",
     "price": 1.99,
-    "productId": "2748190",
+    "productId": null,
     "market": "Knoxville, TN",
-    "locationConfirmed": false,
+    "locationConfirmed": true,
     "marketConfirmed": true,
-    "sourceType": "retailer-product-page",
+    "sourceType": "public-product-record",
     "sourceUrl": null,
-    "observedAt": "2026-08-29"
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
   },
   {
     "canonicalId": "organic-cucumber",
     "retailer": "Sprouts",
     "title": "Organic Hothouse Cucumber",
     "brand": null,
-    "description": "Organic hothouse cucumber",
+    "description": "Fresh organic hothouse cucumber",
     "size": "1 each",
     "price": 2.79,
-    "productId": "19168812",
+    "productId": null,
+    "market": "Knoxville, TN",
+    "locationConfirmed": true,
+    "marketConfirmed": true,
+    "sourceType": "public-product-record",
+    "sourceUrl": null,
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
+  },
+  {
+    "canonicalId": "organic-chicken-thighs",
+    "retailer": "Sprouts",
+    "title": "Sprouts Organic Boneless Chicken Thigh",
+    "brand": "Sprouts",
+    "description": "Organic boneless chicken thighs",
+    "size": "1.5 lb",
+    "price": 11.98,
+    "productId": "34365039",
     "market": "Knoxville, TN",
     "locationConfirmed": false,
-    "marketConfirmed": true,
-    "sourceType": "retailer-product-page",
-    "sourceUrl": null,
-    "observedAt": "2026-08-29"
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://shop.sprouts.com/store/sprouts/products/34365039-sprouts-organic-boneless-chicken-thigh-1-each",
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
+  },
+  {
+    "canonicalId": "whole-milk",
+    "retailer": "Sprouts",
+    "title": "Sprouts Whole Milk",
+    "brand": "Sprouts",
+    "description": "Sprouts whole milk",
+    "size": "128 fl oz",
+    "price": 4.99,
+    "productId": "17983905",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://shop.sprouts.com/store/sprouts/products/17983905-sprouts-whole-milk-128-fl-oz",
+    "observedAt": "2026-08-29",
+    "attributes": {}
+  },
+  {
+    "canonicalId": "greek-yogurt",
+    "retailer": "Sprouts",
+    "title": "Sprouts Plain Whole 5% Greek Yogurt",
+    "brand": "Sprouts",
+    "description": "Plain whole milk Greek yogurt",
+    "size": "32 oz",
+    "price": 5.99,
+    "productId": "24504148",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://shop.sprouts.com/store/sprouts/products/24504148-sprouts-5-plain-whole-greek-yogurt-32-oz",
+    "observedAt": "2026-08-29",
+    "attributes": {}
+  },
+  {
+    "canonicalId": "cheddar-cheese",
+    "retailer": "Sprouts",
+    "title": "Sprouts Mild Cheddar Cheese Block",
+    "brand": "Sprouts",
+    "description": "Mild cheddar cheese block",
+    "size": "8 oz",
+    "price": 2.99,
+    "productId": "63357799",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://shop.sprouts.com/store/sprouts/products/63357799-sprouts-mild-cheddar-cheese-block-8-oz",
+    "observedAt": "2026-08-29",
+    "attributes": {}
   }
 ]
