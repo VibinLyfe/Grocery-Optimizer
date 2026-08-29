@@ -17,10 +17,40 @@
 </head>
 
 <body>
+
+  <div
+    class="app-watermark"
+    aria-hidden="true"
+  >
+    <div class="food-pyramid-watermark">
+
+      <div class="pyramid-tier pyramid-tier-top">
+        <span>MEAT</span>
+      </div>
+
+      <div class="pyramid-tier pyramid-tier-middle">
+        <span>PROTEIN</span>
+        <span>DAIRY</span>
+      </div>
+
+      <div class="pyramid-tier pyramid-tier-lower">
+        <span>FRUIT</span>
+        <span>VEGETABLES</span>
+      </div>
+
+      <div class="pyramid-tier pyramid-tier-base">
+        <span>WHOLE FOODS</span>
+      </div>
+
+    </div>
+  </div>
+
+
   <main class="app-shell">
 
     <section class="hero">
       <div class="hero-copy">
+
         <p class="eyebrow">
           Weekly Grocery Optimizer
         </p>
@@ -32,10 +62,12 @@
 
         <p class="hero-text">
           Keep your regular groceries saved,
+          add your own products,
           check items off as you shop,
           reset the list each week,
           and compare prices across nearby stores.
         </p>
+
       </div>
     </section>
 
@@ -43,6 +75,7 @@
     <section class="panel grocery-panel">
 
       <div class="section-header">
+
         <div>
           <p class="section-kicker">
             My Weekly List
@@ -62,6 +95,7 @@
             Reset Weekly List
           </button>
         </div>
+
       </div>
 
 
@@ -76,6 +110,7 @@
       <div class="add-item-card">
 
         <div class="add-item-header">
+
           <div>
             <p class="section-kicker">
               Add Grocery
@@ -85,12 +120,22 @@
               Add an item to your weekly list
             </h3>
           </div>
+
+          <button
+            id="openCustomProductButton"
+            class="button button-secondary button-small"
+            type="button"
+          >
+            + Add Custom Product
+          </button>
+
         </div>
 
 
         <div class="item-form-grid">
 
           <label class="field field-product">
+
             <span class="field-label">
               Product
             </span>
@@ -102,41 +147,13 @@
               <option value="">
                 Select a product
               </option>
-
-              <option
-                value="ground-beef-organic-grassfed-85-15"
-              >
-                Organic grass-fed 85/15 ground beef
-              </option>
-
-              <option
-                value="organic-broccoli"
-              >
-                Organic broccoli
-              </option>
-
-              <option
-                value="organic-cucumber"
-              >
-                Organic cucumber
-              </option>
-
-              <option
-                value="organic-baby-carrots"
-              >
-                Organic baby carrots
-              </option>
-
-              <option
-                value="organic-mango"
-              >
-                Organic mango
-              </option>
             </select>
+
           </label>
 
 
           <label class="field">
+
             <span class="field-label">
               Quantity
             </span>
@@ -145,58 +162,16 @@
               id="quantitySelect"
               class="select-control"
             >
-              <option value="0.5">
-                0.5
-              </option>
-
-              <option value="1" selected>
+              <option value="1">
                 1
               </option>
-
-              <option value="1.5">
-                1.5
-              </option>
-
-              <option value="2">
-                2
-              </option>
-
-              <option value="2.5">
-                2.5
-              </option>
-
-              <option value="3">
-                3
-              </option>
-
-              <option value="4">
-                4
-              </option>
-
-              <option value="5">
-                5
-              </option>
-
-              <option value="6">
-                6
-              </option>
-
-              <option value="8">
-                8
-              </option>
-
-              <option value="10">
-                10
-              </option>
-
-              <option value="12">
-                12
-              </option>
             </select>
+
           </label>
 
 
           <label class="field">
+
             <span class="field-label">
               Unit
             </span>
@@ -208,55 +183,13 @@
               <option value="each">
                 each
               </option>
-
-              <option value="package">
-                package
-              </option>
-
-              <option value="lb">
-                lb
-              </option>
-
-              <option value="oz">
-                oz
-              </option>
-
-              <option value="g">
-                g
-              </option>
-
-              <option value="kg">
-                kg
-              </option>
-
-              <option value="fl oz">
-                fl oz
-              </option>
-
-              <option value="pint">
-                pint
-              </option>
-
-              <option value="quart">
-                quart
-              </option>
-
-              <option value="gallon">
-                gallon
-              </option>
-
-              <option value="ml">
-                ml
-              </option>
-
-              <option value="liter">
-                liter
-              </option>
             </select>
+
           </label>
 
 
           <div class="field field-action">
+
             <span
               class="field-label field-label-spacer"
               aria-hidden="true"
@@ -271,7 +204,207 @@
             >
               Add Item
             </button>
+
           </div>
+
+        </div>
+
+
+        <div
+          id="customProductPanel"
+          class="custom-product-panel"
+          hidden
+        >
+
+          <div class="custom-product-header">
+
+            <div>
+              <p class="section-kicker">
+                Custom Product
+              </p>
+
+              <h3>
+                Save a new grocery product
+              </h3>
+
+              <p class="custom-product-helper">
+                Add it once and it will stay in your product list for future weeks.
+              </p>
+            </div>
+
+            <button
+              id="closeCustomProductButton"
+              class="icon-button"
+              type="button"
+              aria-label="Close custom product form"
+            >
+              ×
+            </button>
+
+          </div>
+
+
+          <div class="custom-product-grid">
+
+            <label class="field custom-product-name">
+
+              <span class="field-label">
+                Product name
+              </span>
+
+              <input
+                id="customProductName"
+                class="text-control"
+                type="text"
+                placeholder="Example: Organic Japanese yams"
+                autocomplete="off"
+              />
+
+            </label>
+
+
+            <label class="field">
+
+              <span class="field-label">
+                Category
+              </span>
+
+              <select
+                id="customProductCategory"
+                class="select-control"
+              >
+                <option value="Produce">
+                  Produce
+                </option>
+
+                <option value="Meat">
+                  Meat
+                </option>
+
+                <option value="Dairy & Eggs">
+                  Dairy & Eggs
+                </option>
+
+                <option value="Pantry">
+                  Pantry
+                </option>
+
+                <option value="Bakery">
+                  Bakery
+                </option>
+
+                <option value="Beverages">
+                  Beverages
+                </option>
+
+                <option value="Household">
+                  Household
+                </option>
+
+                <option value="Other">
+                  Other
+                </option>
+              </select>
+
+            </label>
+
+
+            <label class="field">
+
+              <span class="field-label">
+                Default unit
+              </span>
+
+              <select
+                id="customProductDefaultUnit"
+                class="select-control"
+              >
+                <option value="each">
+                  each
+                </option>
+
+                <option value="package">
+                  package
+                </option>
+
+                <option value="lb">
+                  lb
+                </option>
+
+                <option value="oz">
+                  oz
+                </option>
+
+                <option value="dozen">
+                  dozen
+                </option>
+
+                <option value="can">
+                  can
+                </option>
+
+                <option value="jar">
+                  jar
+                </option>
+
+                <option value="bottle">
+                  bottle
+                </option>
+
+                <option value="loaf">
+                  loaf
+                </option>
+
+                <option value="bag">
+                  bag
+                </option>
+
+                <option value="roll">
+                  roll
+                </option>
+
+                <option value="gallon">
+                  gallon
+                </option>
+
+                <option value="quart">
+                  quart
+                </option>
+
+                <option value="fl oz">
+                  fl oz
+                </option>
+              </select>
+
+            </label>
+
+
+            <div class="field custom-product-action">
+
+              <span
+                class="field-label field-label-spacer"
+                aria-hidden="true"
+              >
+                Save
+              </span>
+
+              <button
+                id="saveCustomProductButton"
+                class="button button-primary"
+                type="button"
+              >
+                Save Product
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <p class="custom-product-note">
+            Custom products can be added to your weekly list immediately.
+            Price comparison will use existing evidence first and future dynamic search coverage where available.
+          </p>
 
         </div>
 
@@ -281,6 +414,7 @@
       <div class="compare-bar">
 
         <div class="compare-summary">
+
           <span
             id="remainingItemCount"
             class="compare-count"
@@ -291,6 +425,7 @@
           <span class="compare-helper">
             Checked items will be ignored.
           </span>
+
         </div>
 
         <button
@@ -311,12 +446,14 @@
       class="panel status-panel"
       hidden
     >
+
       <div
         id="status"
         class="status-message"
         aria-live="polite"
       >
       </div>
+
     </section>
 
 
@@ -327,7 +464,9 @@
     >
 
       <div class="section-header results-header">
+
         <div>
+
           <p class="section-kicker">
             Optimized Shopping Plan
           </p>
@@ -335,7 +474,9 @@
           <h2>
             Best ways to shop this list
           </h2>
+
         </div>
+
       </div>
 
 
@@ -351,7 +492,9 @@
     <section class="panel explanation-panel">
 
       <div class="section-header">
+
         <div>
+
           <p class="section-kicker">
             How Optimization Works
           </p>
@@ -359,13 +502,16 @@
           <h2>
             Lowest price without losing the product you actually want
           </h2>
+
         </div>
+
       </div>
 
 
       <div class="explanation-grid">
 
         <article class="explanation-card">
+
           <span class="explanation-number">
             1
           </span>
@@ -380,10 +526,12 @@
             even if that means visiting
             multiple stores.
           </p>
+
         </article>
 
 
         <article class="explanation-card">
+
           <span class="explanation-number">
             2
           </span>
@@ -396,10 +544,12 @@
             Looks for a strong combination
             of low prices and fewer store stops.
           </p>
+
         </article>
 
 
         <article class="explanation-card">
+
           <span class="explanation-number">
             3
           </span>
@@ -413,6 +563,7 @@
             option when convenience matters
             more than squeezing out every dollar.
           </p>
+
         </article>
 
       </div>
@@ -470,11 +621,13 @@
       <div class="optimization-card-header">
 
         <div>
+
           <p class="optimization-label">
           </p>
 
           <h3 class="optimization-title">
           </h3>
+
         </div>
 
         <div class="optimization-total">
