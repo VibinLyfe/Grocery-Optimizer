@@ -32,7 +32,10 @@
     "marketConfirmed": false,
     "sourceType": "public-product-record",
     "sourceUrl": null,
-    "observedAt": null
+    "observedAt": null,
+    "attributes": {
+      "organic": true
+    }
   },
   {
     "canonicalId": "organic-broccoli",
@@ -48,6 +51,191 @@
     "marketConfirmed": false,
     "sourceType": "public-product-record",
     "sourceUrl": null,
-    "observedAt": null
+    "observedAt": null,
+    "attributes": {
+      "organic": true
+    }
+  },
+  {
+    "canonicalId": "organic-eggs",
+    "retailer": "Earth Fare",
+    "title": "OrgaNick Pastures Heirloom Colored Pasture Raised Large Organic Eggs",
+    "brand": "OrgaNick Pastures",
+    "description": "Pasture raised large organic eggs",
+    "size": "12 ct",
+    "price": 7.89,
+    "productId": "24628478",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/24628478-organics-heirloom-eggs-12-ct",
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
+  },
+  {
+    "canonicalId": "organic-eggs",
+    "retailer": "Earth Fare",
+    "title": "Wild Harvest Organic Brown Large Eggs",
+    "brand": "Wild Harvest",
+    "description": "Organic brown large eggs",
+    "size": "12 ct",
+    "price": 5.59,
+    "productId": "2796081",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/2796081-wild-harvest-eggs-organic-brown-large-12-ct",
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
+  },
+  {
+    "canonicalId": "whole-milk",
+    "retailer": "Earth Fare",
+    "title": "Homestead Creamery Milk, Homogenized, Whole",
+    "brand": "Homestead Creamery",
+    "description": "Homogenized whole milk",
+    "size": "1 qt",
+    "price": 4.49,
+    "productId": "605984",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/605984-homestead-creamery-milk-homogenized-whole-1-qt",
+    "observedAt": "2026-08-29",
+    "attributes": {}
+  },
+  {
+    "canonicalId": "whole-milk",
+    "retailer": "Earth Fare",
+    "title": "Homestead Creamery Milk, Homogenized, Whole",
+    "brand": "Homestead Creamery",
+    "description": "Homogenized whole milk",
+    "size": "0.5 gal",
+    "price": 6.79,
+    "productId": "245736",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/245736-homestead-creamery-milk-homogenized-whole-0-5-gl",
+    "observedAt": "2026-08-29",
+    "attributes": {}
+  },
+  {
+    "canonicalId": "whole-milk",
+    "retailer": "Earth Fare",
+    "title": "Horizon Organic Whole Milk",
+    "brand": "Horizon Organic",
+    "description": "Organic whole milk",
+    "size": "64 fl oz",
+    "price": 7.89,
+    "productId": "72019",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/72019-horizon-organic-whole-high-vitamin-d-milk-64-fl-oz",
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
+  },
+  {
+    "canonicalId": "greek-yogurt",
+    "retailer": "Earth Fare",
+    "title": "Chobani Lowfat Plain Greek Yogurt",
+    "brand": "Chobani",
+    "description": "Lowfat plain Greek yogurt",
+    "size": "32 oz",
+    "price": 8.99,
+    "productId": "87256806",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/87256806-chobani-20g-protein-plain-yogurt",
+    "observedAt": "2026-08-29",
+    "attributes": {}
+  },
+  {
+    "canonicalId": "organic-chicken-breast",
+    "retailer": "Earth Fare",
+    "title": "Bell & Evans Ultra Premium Boneless Skinless Chicken Breast",
+    "brand": "Bell & Evans",
+    "description": "Organic boneless skinless chicken breast",
+    "size": "8 oz",
+    "price": 6.79,
+    "productId": "28243971",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/28243971-bell-evans-boneless-skinless-chicken-breast-8-oz",
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
+  },
+  {
+    "canonicalId": "rolled-oats",
+    "retailer": "Earth Fare",
+    "title": "Earth Fare Organic Rolled Oats",
+    "brand": "Earth Fare",
+    "description": "Organic whole grain rolled oats",
+    "size": "18 oz",
+    "price": 3.39,
+    "productId": "19277858",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/19277858-earth-fare-organic-rolled-oats-18-oz",
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
+  },
+  {
+    "canonicalId": "peanut-butter",
+    "retailer": "Earth Fare",
+    "title": "Fix & Fogg Smooth Peanut Butter",
+    "brand": "Fix & Fogg",
+    "description": "Smooth peanut butter with no added sugar",
+    "size": "13.2 oz",
+    "price": 8.99,
+    "productId": "21519474",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/21519474-fix-fogg-peanut-butter-smooth-13-2-oz",
+    "observedAt": "2026-08-29",
+    "attributes": {}
+  },
+  {
+    "canonicalId": "whole-grain-bread",
+    "retailer": "Earth Fare",
+    "title": "Genuine Bavarian Organic Whole Grain Flaxseed Bread",
+    "brand": "Genuine Bavarian",
+    "description": "Organic whole grain flaxseed bread",
+    "size": "17.6 oz",
+    "price": 6.79,
+    "productId": "82921",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "public-indexed-product-page",
+    "sourceUrl": "https://order.earthfare.com/store/earth-fare-market/products/82921-genuine-bavarian-organic-whole-grain-bread-17-6-oz-overwrap-17-6-oz",
+    "observedAt": "2026-08-29",
+    "attributes": {
+      "organic": true
+    }
   }
 ]
