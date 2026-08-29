@@ -35,17 +35,10 @@ const KROGER_BASE =
   "https://api.kroger.com/v1";
 
 const TARGET_KROGER = {
-  address:
-    "9225 Kingston Pike",
-
-  city:
-    "Knoxville",
-
-  state:
-    "TN",
-
-  zip:
-    "37922"
+  address: "9225 Kingston Pike",
+  city: "Knoxville",
+  state: "TN",
+  zip: "37922"
 };
 
 
@@ -107,6 +100,38 @@ function cleanText(
 }
 
 
+function slugify(
+  value
+) {
+  return cleanText(value)
+    .replace(
+      /[^a-z0-9]+/g,
+      "-"
+    )
+    .replace(
+      /^-+|-+$/g,
+      ""
+    );
+}
+
+
+function titleCase(
+  value
+) {
+  return String(value || "")
+    .trim()
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .replace(
+      /\b\w/g,
+      character =>
+        character.toUpperCase()
+    );
+}
+
+
 function normalizedToDisplay(
   quantity,
   normalizedUnit,
@@ -137,7 +162,10 @@ function normalizedToDisplay(
         return qty;
 
       case "g":
-        return qty * 28.349523125;
+        return (
+          qty *
+          28.349523125
+        );
 
       case "kg":
         return (
@@ -168,7 +196,10 @@ function normalizedToDisplay(
         return qty / 128;
 
       case "ml":
-        return qty * 29.5735295625;
+        return (
+          qty *
+          29.5735295625
+        );
 
       case "liter":
         return (
@@ -198,7 +229,10 @@ function displayUnit(
     return "fl oz";
   }
 
-  return normalized;
+  return (
+    normalized ||
+    unit
+  );
 }
 
 
@@ -287,14 +321,9 @@ function summarizeFreshness(
     !relevant.length
   ) {
     return {
-      freshness:
-        null,
-
-      ageDays:
-        null,
-
-      needsRefresh:
-        null
+      freshness: null,
+      ageDays: null,
+      needsRefresh: null
     };
   }
 
@@ -367,12 +396,8 @@ function summarizeFreshness(
   }
 
   return {
-    freshness:
-      worst,
-
-    ageDays:
-      maxAge,
-
+    freshness: worst,
+    ageDays: maxAge,
     needsRefresh
   };
 }
@@ -384,73 +409,239 @@ function summarizeFreshness(
  * =====================================================
  */
 
-function parseRequest(
-  text
+function extractQuantityAndUnit(
+  raw
 ) {
-  const raw =
-    String(text || "")
-      .trim();
-
   const lower =
     cleanText(raw);
 
-  let qty = 1;
-  let unit = "each";
+  const patterns = [
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(lb|lbs|pound|pounds)\b/,
+      unit:
+        "lb"
+    },
 
-  let match =
-    lower.match(
-      /(\d+(?:\.\d+)?)\s*(lb|lbs|pound|pounds)\b/
-    );
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(oz|ounce|ounces)\b/,
+      unit:
+        "oz"
+    },
 
-  if (match) {
-    qty =
-      Number(
-        match[1]
-      );
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(g|gram|grams)\b/,
+      unit:
+        "g"
+    },
 
-    unit =
-      "lb";
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(kg|kilogram|kilograms)\b/,
+      unit:
+        "kg"
+    },
 
-  } else {
-    match =
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(fl oz|fluid ounce|fluid ounces)\b/,
+      unit:
+        "fl oz"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(pint|pints)\b/,
+      unit:
+        "pint"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(quart|quarts)\b/,
+      unit:
+        "quart"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(gallon|gallons)\b/,
+      unit:
+        "gallon"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(ml|milliliter|milliliters)\b/,
+      unit:
+        "ml"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(liter|liters|litre|litres)\b/,
+      unit:
+        "liter"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(each)\b/,
+      unit:
+        "each"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(package|packages|pack|packs)\b/,
+      unit:
+        "package"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(dozen)\b/,
+      unit:
+        "dozen"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(can|cans)\b/,
+      unit:
+        "can"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(jar|jars)\b/,
+      unit:
+        "jar"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(bottle|bottles)\b/,
+      unit:
+        "bottle"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(loaf|loaves)\b/,
+      unit:
+        "loaf"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(bag|bags)\b/,
+      unit:
+        "bag"
+    },
+
+    {
+      regex:
+        /^(\d+(?:\.\d+)?)\s*(roll|rolls)\b/,
+      unit:
+        "roll"
+    }
+  ];
+
+  for (
+    const pattern of
+    patterns
+  ) {
+    const match =
       lower.match(
-        /(\d+(?:\.\d+)?)\s*(oz|ounce|ounces)\b/
+        pattern.regex
       );
 
     if (match) {
-      qty =
-        Number(
-          match[1]
-        );
+      return {
+        qty:
+          Number(
+            match[1]
+          ),
 
-      unit =
-        "oz";
+        unit:
+          pattern.unit,
+
+        matchedText:
+          match[0]
+      };
     }
   }
+
+  const countMatch =
+    lower.match(
+      /^(\d+(?:\.\d+)?)\b/
+    );
 
   if (
-    unit === "each"
+    countMatch
   ) {
-    const countMatch =
-      lower.match(
-        /^(\d+(?:\.\d+)?)\b/
-      );
-
-    if (
-      countMatch
-    ) {
-      qty =
+    return {
+      qty:
         Number(
           countMatch[1]
-        );
-    }
+        ),
+
+      unit:
+        "each",
+
+      matchedText:
+        countMatch[0]
+    };
   }
 
-  let canonical =
-    null;
+  return {
+    qty: 1,
+    unit: "each",
+    matchedText: ""
+  };
+}
 
-  let krogerTerm =
-    raw;
+
+function stripQuantityPrefix(
+  raw,
+  matchedText
+) {
+  let description =
+    String(raw || "")
+      .trim();
+
+  if (
+    matchedText &&
+    cleanText(description)
+      .startsWith(
+        cleanText(
+          matchedText
+        )
+      )
+  ) {
+    description =
+      description
+        .slice(
+          matchedText.length
+        )
+        .trim();
+  }
+
+  return (
+    description ||
+    String(raw || "").trim()
+  );
+}
+
+
+function detectKnownCanonical(
+  description
+) {
+  const lower =
+    cleanText(description);
 
   if (
     lower.includes(
@@ -474,13 +665,16 @@ function parseRequest(
       )
     )
   ) {
-    canonical =
-      "ground-beef-organic-grassfed-85-15";
+    return {
+      canonical:
+        "ground-beef-organic-grassfed-85-15",
 
-    krogerTerm =
-      "organic grass fed 85/15 ground beef";
+      queryName:
+        "organic grass fed 85/15 ground beef"
+    };
+  }
 
-  } else if (
+  if (
     lower.includes(
       "broccoli"
     ) &&
@@ -488,13 +682,16 @@ function parseRequest(
       "organic"
     )
   ) {
-    canonical =
-      "organic-broccoli";
+    return {
+      canonical:
+        "organic-broccoli",
 
-    krogerTerm =
-      "organic broccoli";
+      queryName:
+        "organic broccoli"
+    };
+  }
 
-  } else if (
+  if (
     lower.includes(
       "cucumber"
     ) &&
@@ -502,13 +699,16 @@ function parseRequest(
       "organic"
     )
   ) {
-    canonical =
-      "organic-cucumber";
+    return {
+      canonical:
+        "organic-cucumber",
 
-    krogerTerm =
-      "organic cucumber";
+      queryName:
+        "organic cucumber"
+    };
+  }
 
-  } else if (
+  if (
     lower.includes(
       "baby carrot"
     ) &&
@@ -516,61 +716,208 @@ function parseRequest(
       "organic"
     )
   ) {
-    canonical =
-      "organic-baby-carrots";
+    return {
+      canonical:
+        "organic-baby-carrots",
 
-    krogerTerm =
-      "organic baby carrots";
+      queryName:
+        "organic baby carrots"
+    };
+  }
 
-  } else if (
+  if (
     lower.includes(
       "mango"
     )
   ) {
-    canonical =
-      "mango";
+    return {
+      canonical:
+        "mango",
 
-    krogerTerm =
-      lower.includes(
-        "organic"
-      )
-        ? "organic mango"
-        : "mango";
+      queryName:
+        lower.includes(
+          "organic"
+        )
+          ? "organic mango"
+          : "mango"
+    };
   }
 
-  const attributes =
-    detectAttributes(raw);
+  return null;
+}
 
-  let normalized =
-    null;
 
-  if (
-    canonical
-  ) {
-    normalized =
+function buildGenericNormalizedRequest({
+  canonicalId,
+  description,
+  quantity,
+  unit,
+  attributes
+}) {
+  try {
+    const normalized =
       normalizeRequest({
-        canonicalId:
-          canonical,
-
-        description:
-          raw,
-
-        quantity:
-          qty,
-
+        canonicalId,
+        description,
+        quantity,
         unit,
-
         attributes
       });
+
+    if (normalized) {
+      return normalized;
+    }
+
+  } catch (
+    error
+  ) {
+    /*
+     * Continue to conservative fallback below.
+     */
   }
+
+  const normalizedUnit =
+    normalizeUnit(unit);
+
+  /*
+   * Generic fallback is mainly intended to let custom
+   * requests reach dynamic discovery.
+   *
+   * Weight/count conversions that normalize.js already
+   * understands continue to use normalizeRequest above.
+   */
+
+  return {
+    canonicalId,
+    description,
+    requestedQuantity:
+      quantity,
+    requestedUnit:
+      unit,
+
+    unitType:
+      (
+        normalizedUnit === "lb" ||
+        normalizedUnit === "oz" ||
+        normalizedUnit === "g" ||
+        normalizedUnit === "kg"
+      )
+        ? "weight"
+        : (
+            normalizedUnit === "fl_oz" ||
+            normalizedUnit === "pint" ||
+            normalizedUnit === "quart" ||
+            normalizedUnit === "gallon" ||
+            normalizedUnit === "ml" ||
+            normalizedUnit === "liter"
+          )
+          ? "liquid"
+          : "count",
+
+    normalizedQuantity:
+      quantity,
+
+    normalizedUnit:
+      normalizedUnit ||
+      unit,
+
+    attributes:
+      attributes ||
+      {}
+  };
+}
+
+
+function parseRequest(
+  text
+) {
+  const raw =
+    String(text || "")
+      .trim();
+
+  if (!raw) {
+    return {
+      raw: "",
+      qty: 1,
+      unit: "each",
+      canonical: null,
+      knownCanonical: false,
+      queryName: "",
+      krogerTerm: "",
+      attributes: {},
+      normalized: null
+    };
+  }
+
+  const quantityInfo =
+    extractQuantityAndUnit(
+      raw
+    );
+
+  const description =
+    stripQuantityPrefix(
+      raw,
+      quantityInfo.matchedText
+    );
+
+  const known =
+    detectKnownCanonical(
+      description
+    );
+
+  const queryName =
+    known?.queryName ||
+    cleanText(description);
+
+  const canonical =
+    known?.canonical ||
+    `custom-${slugify(
+      queryName
+    )}`;
+
+  const attributes =
+    detectAttributes(
+      description
+    );
+
+  const normalized =
+    buildGenericNormalizedRequest({
+      canonicalId:
+        canonical,
+
+      description:
+        raw,
+
+      quantity:
+        quantityInfo.qty,
+
+      unit:
+        quantityInfo.unit,
+
+      attributes
+    });
 
   return {
     raw,
-    qty,
-    unit,
+
+    qty:
+      quantityInfo.qty,
+
+    unit:
+      quantityInfo.unit,
+
     canonical,
-    krogerTerm,
+
+    knownCanonical:
+      Boolean(known),
+
+    queryName,
+
+    krogerTerm:
+      queryName,
+
     attributes,
+
     normalized
   };
 }
@@ -580,8 +927,7 @@ function parseRequest(
  * =====================================================
  * PRODUCT REGISTRY
  *
- * Seed file remains only as the canonical product
- * registry. Retailer prices do not come from seed data.
+ * Seed data is optional for custom products.
  * =====================================================
  */
 
@@ -642,8 +988,39 @@ function loadSeedData() {
     }
   }
 
-  throw new Error(
-    "Could not load seed pricing registry."
+  return {
+    products: []
+  };
+}
+
+
+function resolveProductName(
+  seed,
+  parsed
+) {
+  const products =
+    Array.isArray(
+      seed?.products
+    )
+      ? seed.products
+      : [];
+
+  const registered =
+    products.find(
+      item =>
+        item.canonical_id ===
+        parsed.canonical
+    );
+
+  if (
+    registered?.name
+  ) {
+    return registered.name;
+  }
+
+  return titleCase(
+    parsed.queryName ||
+    parsed.raw
   );
 }
 
@@ -654,11 +1031,8 @@ function loadSeedData() {
  * =====================================================
  */
 
-let krogerToken =
-  null;
-
-let krogerTokenExpiresAt =
-  0;
+let krogerToken = null;
+let krogerTokenExpiresAt = 0;
 
 
 async function getKrogerToken() {
@@ -822,27 +1196,19 @@ async function findTargetKroger() {
 
   const exact =
     stores.find(
-      store => {
-        const address =
-          cleanText(
-            store.address
-              ?.addressLine1
-          );
-
-        return (
-          address ===
-          targetAddress
-        );
-      }
+      store =>
+        cleanText(
+          store.address
+            ?.addressLine1
+        ) ===
+        targetAddress
     );
 
   const store =
     exact ||
     stores[0];
 
-  if (
-    !store
-  ) {
+  if (!store) {
     throw new Error(
       "Could not find the target Kroger location."
     );
@@ -875,9 +1241,7 @@ function extractPrice(
   const price =
     item?.price;
 
-  if (
-    !price
-  ) {
+  if (!price) {
     return null;
   }
 
@@ -892,14 +1256,11 @@ function extractPrice(
     );
 
   if (
-    Number.isFinite(
-      promo
-    ) &&
+    Number.isFinite(promo) &&
     promo > 0
   ) {
     return {
-      amount:
-        promo,
+      amount: promo,
 
       regular:
         Number.isFinite(
@@ -914,19 +1275,13 @@ function extractPrice(
   }
 
   if (
-    Number.isFinite(
-      regular
-    ) &&
+    Number.isFinite(regular) &&
     regular > 0
   ) {
     return {
-      amount:
-        regular,
-
+      amount: regular,
       regular,
-
-      type:
-        "regular"
+      type: "regular"
     };
   }
 
@@ -936,9 +1291,138 @@ function extractPrice(
 
 /*
  * =====================================================
- * KROGER PRODUCT MATCH
+ * KROGER MATCHING
  * =====================================================
  */
+
+function requiredAttributePenalty(
+  parsed,
+  productText
+) {
+  let penalty = 0;
+
+  if (
+    parsed.attributes?.organic &&
+    !productText.includes(
+      "organic"
+    )
+  ) {
+    penalty += 15;
+  }
+
+  if (
+    parsed.attributes?.grassFed &&
+    !productText.includes(
+      "grass"
+    )
+  ) {
+    penalty += 15;
+  }
+
+  if (
+    parsed.attributes?.wholeBean &&
+    !productText.includes(
+      "whole bean"
+    )
+  ) {
+    penalty += 12;
+  }
+
+  return penalty;
+}
+
+
+function scoreGenericKrogerProduct(
+  product,
+  parsed
+) {
+  const text =
+    cleanText(
+      [
+        product.description,
+        product.brand
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+
+  const requested =
+    cleanText(
+      parsed.queryName
+    );
+
+  const ignoredWords =
+    new Set([
+      "organic",
+      "fresh",
+      "the",
+      "and",
+      "with",
+      "for"
+    ]);
+
+  const tokens =
+    [
+      ...new Set(
+        requested
+          .split(/\s+/)
+          .map(
+            token =>
+              token.replace(
+                /[^a-z0-9]/g,
+                ""
+              )
+          )
+          .filter(
+            token =>
+              token.length >= 3 &&
+              !ignoredWords.has(
+                token
+              )
+          )
+      )
+    ];
+
+  let score = 0;
+
+  for (
+    const token of
+    tokens
+  ) {
+    if (
+      text.includes(token)
+    ) {
+      score += 5;
+    }
+  }
+
+  if (
+    parsed.attributes?.organic &&
+    text.includes(
+      "organic"
+    )
+  ) {
+    score += 8;
+  }
+
+  if (
+    parsed.attributes?.grassFed &&
+    text.includes(
+      "grass"
+    )
+  ) {
+    score += 8;
+  }
+
+  score -=
+    requiredAttributePenalty(
+      parsed,
+      text
+    );
+
+  return score;
+}
+
 
 function scoreKrogerProduct(
   product,
@@ -954,15 +1438,12 @@ function scoreKrogerProduct(
         .join(" ")
     );
 
-  let score = 0;
-
-  const canonical =
-    parsed.canonical;
-
   if (
-    canonical ===
+    parsed.canonical ===
     "ground-beef-organic-grassfed-85-15"
   ) {
+    let score = 0;
+
     if (
       text.includes(
         "ground beef"
@@ -988,17 +1469,13 @@ function scoreKrogerProduct(
     }
 
     if (
-      text.includes(
-        "85"
-      )
+      text.includes("85")
     ) {
       score += 4;
     }
 
     if (
-      text.includes(
-        "15"
-      )
+      text.includes("15")
     ) {
       score += 3;
     }
@@ -1007,9 +1484,11 @@ function scoreKrogerProduct(
   }
 
   if (
-    canonical ===
+    parsed.canonical ===
     "organic-broccoli"
   ) {
+    let score = 0;
+
     if (
       text.includes(
         "broccoli"
@@ -1030,9 +1509,11 @@ function scoreKrogerProduct(
   }
 
   if (
-    canonical ===
+    parsed.canonical ===
     "organic-cucumber"
   ) {
+    let score = 0;
+
     if (
       text.includes(
         "cucumber"
@@ -1053,9 +1534,11 @@ function scoreKrogerProduct(
   }
 
   if (
-    canonical ===
+    parsed.canonical ===
     "organic-baby-carrots"
   ) {
+    let score = 0;
+
     if (
       text.includes(
         "carrot"
@@ -1084,9 +1567,11 @@ function scoreKrogerProduct(
   }
 
   if (
-    canonical ===
+    parsed.canonical ===
     "mango"
   ) {
+    let score = 0;
+
     if (
       text.includes(
         "mango"
@@ -1108,7 +1593,10 @@ function scoreKrogerProduct(
     return score;
   }
 
-  return score;
+  return scoreGenericKrogerProduct(
+    product,
+    parsed
+  );
 }
 
 
@@ -1148,8 +1636,7 @@ async function searchLiveKroger(
       ? payload.data
       : [];
 
-  const candidates =
-    [];
+  const candidates = [];
 
   for (
     const product of
@@ -1183,20 +1670,9 @@ async function searchLiveKroger(
           item
         );
 
-      if (
-        !priceInfo
-      ) {
+      if (!priceInfo) {
         continue;
       }
-
-      /*
-       * Product description is intentionally included
-       * before item.size. normalize.js uses that to
-       * correctly detect multipacks such as:
-       *
-       * 3 LB BIG DEAL
-       * size: 3 ct / 1 lb
-       */
 
       const normalized =
         normalizeOffer({
@@ -1273,9 +1749,7 @@ async function searchLiveKroger(
           normalized
         );
 
-      if (
-        !packagePlan
-      ) {
+      if (!packagePlan) {
         continue;
       }
 
@@ -1347,10 +1821,20 @@ async function searchLiveKroger(
           priceInfo.type,
 
         match:
-          "exact",
+          parsed.knownCanonical
+            ? "exact"
+            : "estimated",
 
         matchScore:
-          100,
+          parsed.knownCanonical
+            ? 100
+            : Math.min(
+                95,
+                Math.max(
+                  60,
+                  score * 5
+                )
+              ),
 
         confidenceScore:
           100,
@@ -1416,6 +1900,17 @@ async function searchLiveKroger(
       ?.score ??
     0;
 
+  const threshold =
+    parsed.knownCanonical
+      ? Math.max(
+          8,
+          bestScore - 5
+        )
+      : Math.max(
+          5,
+          bestScore - 5
+        );
+
   return {
     store,
 
@@ -1424,10 +1919,7 @@ async function searchLiveKroger(
         .filter(
           candidate =>
             candidate.score >=
-            Math.max(
-              8,
-              bestScore - 5
-            )
+            threshold
         )
         .slice(
           0,
@@ -1448,8 +1940,7 @@ function extractEvidenceOffers(
 ) {
   const offers =
     Array.isArray(
-      adapterResult
-        ?.offers
+      adapterResult?.offers
     )
       ? adapterResult.offers
       : [];
@@ -1787,9 +2278,7 @@ function buildRetailerResult(
   options = {}
 ) {
   if (
-    !Array.isArray(
-      offers
-    ) ||
+    !Array.isArray(offers) ||
     !offers.length ||
     !request?.normalized
   ) {
@@ -1847,11 +2336,6 @@ function buildRetailerResult(
       )
     );
 
-  /*
-   * Preserve the existing frontend contract:
-   * one entry for every physical package required.
-   */
-
   const picks =
     Array.from(
       {
@@ -1863,9 +2347,15 @@ function buildRetailerResult(
     );
 
   const freshness =
-    summarizeFreshness(
-      picks
-    );
+    dataMode === "live"
+      ? {
+          freshness: null,
+          ageDays: null,
+          needsRefresh: null
+        }
+      : summarizeFreshness(
+          picks
+        );
 
   const normalizedUnit =
     request.normalized
@@ -2037,25 +2527,33 @@ function buildEvidenceConnectorStatus(
 
   const offers =
     Array.isArray(
-      adapterResult
-        ?.offers
+      adapterResult?.offers
     )
       ? adapterResult.offers
       : [];
 
+  const dynamicStatus =
+    retrieval.dynamicStatus ||
+    adapterResult?.dynamic
+      ?.retrieval ||
+    null;
+
   return {
-    live:
-      false,
+    live: false,
 
     mode:
-      "dated-retailer-evidence",
+      retrieval.fallbackAcceptedCount > 0
+        ? "dynamic-public-search"
+        : "dated-retailer-evidence",
 
     retrievalSource:
       retrieval.source ||
       null,
 
     message:
-      `${retailer} pricing was loaded from the dated ${retailer} evidence file and processed through the shared normalization, confidence and freshness engine.`,
+      retrieval.fallbackAcceptedCount > 0
+        ? `${retailer} returned a validated dynamic public-search result after no usable stored evidence match was found.`
+        : `${retailer} pricing was processed through its dated evidence connector.`,
 
     observedAt:
       newestObservedAt(
@@ -2084,6 +2582,24 @@ function buildEvidenceConnectorStatus(
         needsRefresh: 0
       },
 
+    fallbackAttempted:
+      Boolean(
+        retrieval.fallbackAttempted
+      ),
+
+    fallbackSource:
+      retrieval.fallbackSource ||
+      null,
+
+    fallbackAcceptedCount:
+      Number(
+        retrieval.fallbackAcceptedCount ||
+        0
+      ),
+
+    dynamic:
+      dynamicStatus,
+
     location:
       market
   };
@@ -2107,24 +2623,38 @@ exports.handler =
           ?.q ||
         "";
 
+      if (
+        !String(text)
+          .trim()
+      ) {
+        return json(
+          400,
+          {
+            ok: false,
+
+            message:
+              "A grocery product is required."
+          }
+        );
+      }
+
       const parsed =
         parseRequest(
           text
         );
 
       if (
-        !parsed.canonical
+        !parsed.normalized
       ) {
         return json(
           200,
           {
-            ok:
-              false,
+            ok: false,
 
             parsed,
 
             message:
-              "Prototype currently recognizes: organic grass-fed 85/15 ground beef, organic broccoli, organic cucumber, organic baby carrots, and mango."
+              "The grocery request could not be normalized."
           }
         );
       }
@@ -2132,45 +2662,24 @@ exports.handler =
       const seed =
         loadSeedData();
 
-      const product =
-        seed.products.find(
-          item =>
-            item.canonical_id ===
-            parsed.canonical
+      const productName =
+        resolveProductName(
+          seed,
+          parsed
         );
 
-      if (
-        !product
-      ) {
-        return json(
-          200,
-          {
-            ok:
-              false,
-
-            message:
-              "The requested product is not currently configured in the product registry."
-          }
-        );
-      }
-
-      const results =
-        [];
+      const results = [];
 
 
       /*
        * =================================================
-       * KROGER
+       * KROGER LIVE API
        * =================================================
        */
 
       let krogerStatus = {
-        live:
-          false,
-
-        mode:
-          "official-api",
-
+        live: false,
+        mode: "official-api",
         message:
           "Kroger live connector was not attempted."
       };
@@ -2187,13 +2696,9 @@ exports.handler =
           const result =
             buildRetailerResult(
               "Kroger",
-
               live.offers,
-
               parsed,
-
               "live",
-
               {
                 confidenceMode:
                   "official-retailer-api",
@@ -2203,33 +2708,27 @@ exports.handler =
 
                 location: {
                   locationId:
-                    live.store
-                      .locationId,
+                    live.store.locationId,
 
                   name:
-                    live.store
-                      .name ||
+                    live.store.name ||
                     "Kroger",
 
                   address:
-                    live.store
-                      .address ||
+                    live.store.address ||
                     null
                 }
               }
             );
 
-          if (
-            result
-          ) {
+          if (result) {
             results.push(
               result
             );
           }
 
           krogerStatus = {
-            live:
-              true,
+            live: true,
 
             mode:
               "official-api",
@@ -2241,23 +2740,19 @@ exports.handler =
               }.`,
 
             locationId:
-              live.store
-                .locationId,
+              live.store.locationId,
 
             address:
-              live.store
-                .address ||
+              live.store.address ||
               null,
 
             candidateCount:
-              live.offers
-                .length
+              live.offers.length
           };
 
         } else {
           krogerStatus = {
-            live:
-              true,
+            live: true,
 
             mode:
               "official-api",
@@ -2271,8 +2766,7 @@ exports.handler =
         error
       ) {
         krogerStatus = {
-          live:
-            false,
+          live: false,
 
           mode:
             "official-api",
@@ -2290,15 +2784,10 @@ exports.handler =
        */
 
       let sproutsStatus = {
-        live:
-          false,
-
+        live: false,
         mode:
           "dated-retailer-evidence",
-
-        retrievalSource:
-          null,
-
+        retrievalSource: null,
         message:
           "Sprouts evidence connector was not attempted."
       };
@@ -2324,13 +2813,9 @@ exports.handler =
         const result =
           buildRetailerResult(
             "Sprouts",
-
             offers,
-
             parsed,
-
             "dated-retailer-evidence",
-
             {
               confidenceMode:
                 "dated-public-retailer-evidence",
@@ -2346,9 +2831,7 @@ exports.handler =
             }
           );
 
-        if (
-          result
-        ) {
+        if (result) {
           results.push(
             result
           );
@@ -2358,8 +2841,7 @@ exports.handler =
         error
       ) {
         sproutsStatus = {
-          live:
-            false,
+          live: false,
 
           mode:
             "dated-retailer-evidence",
@@ -2383,15 +2865,10 @@ exports.handler =
        */
 
       let aldiStatus = {
-        live:
-          false,
-
+        live: false,
         mode:
           "dated-retailer-evidence",
-
-        retrievalSource:
-          null,
-
+        retrievalSource: null,
         message:
           "ALDI evidence connector was not attempted."
       };
@@ -2417,13 +2894,9 @@ exports.handler =
         const result =
           buildRetailerResult(
             "ALDI",
-
             offers,
-
             parsed,
-
             "dated-retailer-evidence",
-
             {
               confidenceMode:
                 "dated-public-retailer-evidence",
@@ -2439,9 +2912,7 @@ exports.handler =
             }
           );
 
-        if (
-          result
-        ) {
+        if (result) {
           results.push(
             result
           );
@@ -2451,8 +2922,7 @@ exports.handler =
         error
       ) {
         aldiStatus = {
-          live:
-            false,
+          live: false,
 
           mode:
             "dated-retailer-evidence",
@@ -2472,21 +2942,22 @@ exports.handler =
       /*
        * =================================================
        * EARTH FARE
+       *
+       * earthfare.js now handles:
+       *
+       * evidence
+       *    ↓ no valid match
+       * dynamic fallback
        * =================================================
        */
 
       let earthFareStatus = {
-        live:
-          false,
-
+        live: false,
         mode:
           "dated-retailer-evidence",
-
-        retrievalSource:
-          null,
-
+        retrievalSource: null,
         message:
-          "Earth Fare evidence connector was not attempted."
+          "Earth Fare connector was not attempted."
       };
 
       try {
@@ -2507,6 +2978,14 @@ exports.handler =
             EARTH_FARE_MARKET
           );
 
+        const usedDynamic =
+          Number(
+            adapterResult
+              ?.retrieval
+              ?.fallbackAcceptedCount ||
+            0
+          ) > 0;
+
         const result =
           buildRetailerResult(
             "Earth Fare",
@@ -2515,26 +2994,32 @@ exports.handler =
 
             parsed,
 
-            "dated-retailer-evidence",
+            usedDynamic
+              ? "dynamic-public-search"
+              : "dated-retailer-evidence",
 
             {
               confidenceMode:
-                "dated-public-retailer-evidence",
+                usedDynamic
+                  ? "validated-dynamic-public-evidence"
+                  : "dated-public-retailer-evidence",
 
               retrievalSource:
                 adapterResult
                   ?.retrieval
                   ?.source ||
-                "earthfare-evidence-file",
+                (
+                  usedDynamic
+                    ? "earthfare-dynamic-search"
+                    : "earthfare-evidence-file"
+                ),
 
               location:
                 EARTH_FARE_MARKET
             }
           );
 
-        if (
-          result
-        ) {
+        if (result) {
           results.push(
             result
           );
@@ -2544,11 +3029,10 @@ exports.handler =
         error
       ) {
         earthFareStatus = {
-          live:
-            false,
+          live: false,
 
           mode:
-            "dated-retailer-evidence",
+            "evidence-with-dynamic-fallback",
 
           retrievalSource:
             "earthfare-evidence-file",
@@ -2564,7 +3048,7 @@ exports.handler =
 
       /*
        * =================================================
-       * SORT
+       * SORT RESULTS
        * =================================================
        */
 
@@ -2584,19 +3068,21 @@ exports.handler =
       return json(
         200,
         {
-          ok:
-            true,
+          ok: true,
 
           parsed,
 
           product:
-            product.name,
+            productName,
+
+          customProduct:
+            !parsed.knownCanonical,
 
           market:
             "Knoxville, TN",
 
           disclaimer:
-            "Kroger uses live official API data. Sprouts, ALDI, and Earth Fare use dated retailer evidence with shared freshness and confidence scoring. Evidence is current for 0-7 days, aging for 8-14 days, and stale after 14 days.",
+            "Kroger uses its live official API. Sprouts and ALDI currently use dated retailer evidence. Earth Fare uses dated evidence first and can fall back to validated dynamic public search when a permitted search provider is configured. No retailer price is invented when reliable evidence is unavailable.",
 
           connectors: {
             kroger:
@@ -2613,8 +3099,7 @@ exports.handler =
           },
 
           normalization: {
-            enabled:
-              true,
+            enabled: true,
 
             internalWeightUnit:
               "oz",
@@ -2643,8 +3128,7 @@ exports.handler =
       return json(
         500,
         {
-          ok:
-            false,
+          ok: false,
 
           error:
             error.message
