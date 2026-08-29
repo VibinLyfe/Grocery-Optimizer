@@ -3,38 +3,30 @@
  *
  * Sprouts retailer adapter for Grocery Optimizer.
  *
- * DATA FLOW
- * ---------
+ * PURPOSE
+ * -------
+ * Load dated Sprouts evidence from:
  *
  * data/sprouts-evidence.json
- *          ↓
- * retrieveSproutsCandidates()
- *          ↓
- * normalizeSproutsEvidence()
- *          ↓
- * scoreProductMatch()
- *          ↓
- * calculatePackageRequirement()
- *          ↓
- * getSproutsOffers()
+ *
+ * Then:
+ * 1. filter evidence to the requested canonical product
+ * 2. normalize package size
+ * 3. score product match
+ * 4. score confidence/freshness
+ * 5. calculate actual package requirement
  *
  * IMPORTANT
  * ---------
+ * This is not a live Sprouts API.
  *
- * This is NOT a live Sprouts API.
- *
- * It reads dated retailer evidence stored in:
- *
- * data/sprouts-evidence.json
- *
- * The evidence file can be refreshed later without
- * changing the comparison / normalization architecture.
+ * The goal of this version is also to make the evidence
+ * file path robust inside Netlify's bundled function
+ * environment.
  */
-
 
 const fs = require("fs");
 const path = require("path");
-
 
 const {
   normalizeOffer,
@@ -50,88 +42,150 @@ const {
  */
 
 const SPROUTS_MARKET = {
-  retailer:
-    "Sprouts",
-
-  city:
-    "Knoxville",
-
-  state:
-    "TN",
-
-  zip:
-    "37922",
-
-  address:
-    "9622 Kingston Pike",
-
-  market:
-    "Knoxville, TN"
+  retailer: "Sprouts",
+  city: "Knoxville",
+  state: "TN",
+  zip: "37922",
+  address: "9622 Kingston Pike",
+  market: "Knoxville, TN"
 };
 
 
 /*
  * =====================================================
- * EVIDENCE FILE
+ * POSSIBLE EVIDENCE PATHS
+ *
+ * Netlify may execute functions from a bundled runtime
+ * location rather than directly from the repo root.
+ *
+ * We therefore test several legitimate locations.
  * =====================================================
  */
 
-function getEvidencePath() {
-  return path.join(
-    process.cwd(),
-    "data",
-    "sprouts-evidence.json"
-  );
+function getEvidencePathCandidates() {
+  return [
+    /*
+     * Normal repo-root execution.
+     */
+    path.join(
+      process.cwd(),
+      "data",
+      "sprouts-evidence.json"
+    ),
+
+    /*
+     * Relative to:
+     *
+     * netlify/functions/lib/sprouts.js
+     *
+     * ../../../data/sprouts-evidence.json
+     */
+    path.resolve(
+      __dirname,
+      "../../../data/sprouts-evidence.json"
+    ),
+
+    /*
+     * Some Netlify bundles preserve a function-level
+     * directory adjacent to bundled support files.
+     */
+    path.resolve(
+      __dirname,
+      "../../data/sprouts-evidence.json"
+    ),
+
+    /*
+     * Additional bundled-runtime fallback.
+     */
+    path.resolve(
+      __dirname,
+      "../data/sprouts-evidence.json"
+    )
+  ];
 }
 
 
 /*
  * =====================================================
- * LOAD EVIDENCE FILE
- *
- * Returns:
- *
- * {
- *   ok: true,
- *   records: [...]
- * }
- *
- * or:
- *
- * {
- *   ok: false,
- *   records: [],
- *   error: "..."
- * }
+ * FIND EVIDENCE FILE
+ * =====================================================
+ */
+
+function findEvidencePath() {
+  const candidates =
+    getEvidencePathCandidates();
+
+
+  for (
+    const candidate of
+    candidates
+  ) {
+    try {
+      if (
+        fs.existsSync(
+          candidate
+        )
+      ) {
+        return {
+          found: true,
+          path: candidate,
+          candidates
+        };
+      }
+    } catch (_) {
+      /*
+       * Ignore one bad filesystem lookup and
+       * continue trying the other locations.
+       */
+    }
+  }
+
+
+  return {
+    found: false,
+    path: null,
+    candidates
+  };
+}
+
+
+/*
+ * =====================================================
+ * LOAD SPROUTS EVIDENCE
  * =====================================================
  */
 
 function loadSproutsEvidence() {
   try {
 
-    const evidencePath =
-      getEvidencePath();
+    const lookup =
+      findEvidencePath();
 
 
     if (
-      !fs.existsSync(
-        evidencePath
-      )
+      !lookup.found ||
+      !lookup.path
     ) {
       return {
         ok: false,
 
         records: [],
 
+        evidencePath:
+          null,
+
+        attemptedPaths:
+          lookup.candidates,
+
         error:
-          "Sprouts evidence file was not found."
+          "Sprouts evidence file was not found in any expected Netlify runtime location."
       };
     }
 
 
     const raw =
       fs.readFileSync(
-        evidencePath,
+        lookup.path,
         "utf8"
       );
 
@@ -150,6 +204,12 @@ function loadSproutsEvidence() {
 
         records: [],
 
+        evidencePath:
+          lookup.path,
+
+        attemptedPaths:
+          lookup.candidates,
+
         error:
           "Sprouts evidence file must contain a JSON array."
       };
@@ -161,6 +221,12 @@ function loadSproutsEvidence() {
 
       records:
         parsed,
+
+      evidencePath:
+        lookup.path,
+
+      attemptedPaths:
+        lookup.candidates,
 
       error:
         null
@@ -174,6 +240,12 @@ function loadSproutsEvidence() {
 
       records: [],
 
+      evidencePath:
+        null,
+
+      attemptedPaths:
+        getEvidencePathCandidates(),
+
       error:
         error.message
     };
@@ -184,24 +256,6 @@ function loadSproutsEvidence() {
 /*
  * =====================================================
  * CONFIDENCE SCORE
- *
- * Confidence answers:
- *
- * "How trustworthy and current is this price evidence?"
- *
- * This is separate from product match.
- *
- * Possible points:
- *
- * retailer known       +20
- * valid price          +20
- * package size known   +15
- * exact store          +20
- * Knoxville market     +10
- * freshness            +20 max
- * strong source type   +5
- *
- * Maximum = 100
  * =====================================================
  */
 
@@ -237,7 +291,7 @@ function scoreConfidence(
 
 
   /*
-   * Package size
+   * Package size known
    */
 
   if (
@@ -311,19 +365,11 @@ function scoreConfidence(
         ageHours <= 168
       ) {
 
-        /*
-         * Within one week
-         */
-
         score += 10;
 
       } else if (
         ageHours <= 720
       ) {
-
-        /*
-         * Within roughly 30 days
-         */
 
         score += 5;
       }
@@ -364,23 +410,11 @@ function scoreConfidence(
  * =====================================================
  * RETRIEVE SPROUTS CANDIDATES
  *
- * PRIMARY SOURCE:
- *
+ * Primary:
  * data/sprouts-evidence.json
  *
- * The request produced by normalize.js includes:
- *
- * request.canonicalId
- *
- * Example:
- *
- * organic-broccoli
- *
- * We only return evidence records for that product.
- *
- * suppliedEvidence remains as a fallback so the app
- * does not completely fail if the JSON file cannot
- * temporarily be loaded.
+ * Fallback:
+ * supplied prototype evidence from compare.js
  * =====================================================
  */
 
@@ -400,10 +434,9 @@ async function retrieveSproutsCandidates(
 
 
   /*
-   * -----------------------------------------------
-   * PRIMARY:
-   * sprouts-evidence.json
-   * -----------------------------------------------
+   * ===================================================
+   * PRIMARY EVIDENCE FILE
+   * ===================================================
    */
 
   if (
@@ -423,14 +456,16 @@ async function retrieveSproutsCandidates(
 
 
           /*
-           * Must actually be Sprouts.
+           * Retailer must be Sprouts.
            */
 
           if (
             String(
               evidence.retailer ||
               ""
-            ).toLowerCase() !==
+            )
+              .trim()
+              .toLowerCase() !==
             "sprouts"
           ) {
             return false;
@@ -438,17 +473,21 @@ async function retrieveSproutsCandidates(
 
 
           /*
-           * If we have a canonical ID,
-           * require an exact canonical match.
+           * Exact canonical product match.
            */
 
           if (
             canonicalId
           ) {
             return (
-              evidence
-                .canonicalId ===
-              canonicalId
+              String(
+                evidence
+                  .canonicalId ||
+                ""
+              ).trim() ===
+              String(
+                canonicalId
+              ).trim()
             );
           }
 
@@ -457,14 +496,6 @@ async function retrieveSproutsCandidates(
         }
       );
 
-
-    /*
-     * If our real evidence file contains
-     * records for this item, use ONLY those.
-     *
-     * We intentionally do not mix them with
-     * prototype seed prices.
-     */
 
     if (
       matchingRecords.length
@@ -476,26 +507,46 @@ async function retrieveSproutsCandidates(
         records:
           matchingRecords,
 
+        evidencePath:
+          loaded.evidencePath,
+
+        attemptedPaths:
+          loaded.attemptedPaths,
+
         loadError:
           null
       };
     }
+
+
+    /*
+     * The file loaded successfully, but there was
+     * no matching canonical product.
+     */
+
+    return {
+      source:
+        "sprouts-evidence-file-no-match",
+
+      records:
+        [],
+
+      evidencePath:
+        loaded.evidencePath,
+
+      attemptedPaths:
+        loaded.attemptedPaths,
+
+      loadError:
+        null
+    };
   }
 
 
   /*
-   * -----------------------------------------------
-   * FALLBACK:
-   * supplied evidence
-   *
-   * This protects the app if:
-   *
-   * - JSON file is temporarily unavailable
-   * - product has not been added to it yet
-   *
-   * compare.js currently supplies legacy prototype
-   * evidence, so this keeps the app functional.
-   * -----------------------------------------------
+   * ===================================================
+   * FALLBACK
+   * ===================================================
    */
 
   const fallback =
@@ -515,6 +566,14 @@ async function retrieveSproutsCandidates(
     records:
       fallback,
 
+    evidencePath:
+      loaded.evidencePath ||
+      null,
+
+    attemptedPaths:
+      loaded.attemptedPaths ||
+      [],
+
     loadError:
       loaded.error ||
       null
@@ -524,7 +583,7 @@ async function retrieveSproutsCandidates(
 
 /*
  * =====================================================
- * NORMALIZE SPROUTS EVIDENCE
+ * NORMALIZE ONE SPROUTS EVIDENCE RECORD
  * =====================================================
  */
 
@@ -629,8 +688,7 @@ function normalizeSproutsEvidence(
   }
 
 
-  normalized
-    .confidenceScore =
+  normalized.confidenceScore =
     scoreConfidence({
       retailer:
         "Sprouts",
@@ -660,33 +718,28 @@ function normalizeSproutsEvidence(
 
 
   /*
-   * Preserve useful source fields
-   * for the response / front end.
+   * Preserve evidence metadata.
    */
 
-  normalized
-    .canonicalId =
+  normalized.canonicalId =
     evidence
       .canonicalId ||
     null;
 
 
-  normalized
-    .observedAt =
+  normalized.observedAt =
     evidence
       .observedAt ||
     null;
 
 
-  normalized
-    .sourceType =
+  normalized.sourceType =
     evidence
       .sourceType ||
     "public-web-evidence";
 
 
-  normalized
-    .sourceUrl =
+  normalized.sourceUrl =
     evidence
       .sourceUrl ||
     null;
@@ -699,8 +752,6 @@ function normalizeSproutsEvidence(
 /*
  * =====================================================
  * GET SPROUTS OFFERS
- *
- * Main public function used by compare.js.
  * =====================================================
  */
 
@@ -708,12 +759,6 @@ async function getSproutsOffers(
   request,
   suppliedEvidence = []
 ) {
-
-  /*
-   * -----------------------------------------------
-   * RETRIEVE
-   * -----------------------------------------------
-   */
 
   const retrieval =
     await retrieveSproutsCandidates(
@@ -731,9 +776,9 @@ async function getSproutsOffers(
 
 
   /*
-   * -----------------------------------------------
-   * NORMALIZE + SCORE
-   * -----------------------------------------------
+   * ===================================================
+   * NORMALIZE / MATCH / CONFIDENCE / PACKAGE PLAN
+   * ===================================================
    */
 
   for (
@@ -769,11 +814,8 @@ async function getSproutsOffers(
 
 
     /*
-     * Reject:
-     *
-     * - incompatible units
-     * - weak product matches
-     * - very low-confidence evidence
+     * Reject incompatible units,
+     * weak matches and weak evidence.
      */
 
     if (
@@ -823,6 +865,10 @@ async function getSproutsOffers(
         normalized
           .sourceType,
 
+      sourceUrl:
+        normalized
+          .sourceUrl,
+
       observedAt:
         normalized
           .observedAt,
@@ -844,14 +890,13 @@ async function getSproutsOffers(
 
 
   /*
-   * -----------------------------------------------
-   * BEST ACTUAL PURCHASE COST FIRST
+   * ===================================================
+   * SORT
    *
-   * Tie breakers:
-   *
-   * 1. stronger match
-   * 2. stronger evidence confidence
-   * -----------------------------------------------
+   * 1. lowest actual purchase cost
+   * 2. strongest product match
+   * 3. strongest evidence confidence
+   * ===================================================
    */
 
   offers.sort(
@@ -866,9 +911,12 @@ async function getSproutsOffers(
 
 
   /*
-   * -----------------------------------------------
+   * ===================================================
    * RESPONSE
-   * -----------------------------------------------
+   *
+   * Include diagnostics so compare.js can expose
+   * exactly where the evidence came from.
+   * ===================================================
    */
 
   return {
@@ -884,6 +932,16 @@ async function getSproutsOffers(
       source:
         retrieval.source,
 
+      evidencePath:
+        retrieval
+          .evidencePath ||
+        null,
+
+      attemptedPaths:
+        retrieval
+          .attemptedPaths ||
+        [],
+
       recordCount:
         rawCandidates
           .length,
@@ -892,7 +950,8 @@ async function getSproutsOffers(
         offers.length,
 
       loadError:
-        retrieval.loadError ||
+        retrieval
+          .loadError ||
         null
     },
 
@@ -914,7 +973,9 @@ async function getSproutsOffers(
 module.exports = {
   SPROUTS_MARKET,
 
-  getEvidencePath,
+  getEvidencePathCandidates,
+
+  findEvidencePath,
 
   loadSproutsEvidence,
 
