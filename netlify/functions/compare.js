@@ -9,25 +9,23 @@
  * Liquid -> fluid ounces
  * Count  -> each
  *
- * DISPLAY
- * -------
- * Results are converted back into the shopper's requested
- * unit before being returned to the existing front end.
- *
  * DATA SOURCES
  * ------------
  * Kroger:
  *   Live official Kroger API
  *
  * Sprouts:
- *   Dated retailer evidence from:
+ *   Dated retailer evidence from
  *   data/sprouts-evidence.json
  *
- *   sprouts.js controls retrieval, normalization,
- *   confidence scoring and freshness.
- *
  * ALDI / Earth Fare:
- *   Prototype seed data for now.
+ *   Prototype seed data
+ *
+ * SPROUTS FRESHNESS
+ * -----------------
+ * 0–7 days   -> current
+ * 8–14 days  -> aging
+ * 15+ days   -> stale
  */
 
 const fs = require("fs");
@@ -170,10 +168,6 @@ function normalizedToDisplay(
 
   switch (unit) {
 
-    /*
-     * WEIGHT
-     */
-
     case "lb":
       return qty / 16;
 
@@ -191,11 +185,6 @@ function normalizedToDisplay(
         qty /
         35.27396195
       );
-
-
-    /*
-     * LIQUID
-     */
 
     case "fl_oz":
       return qty;
@@ -221,14 +210,8 @@ function normalizedToDisplay(
         33.8140227018
       );
 
-
-    /*
-     * COUNT
-     */
-
     case "each":
       return qty;
-
 
     default:
       return qty;
@@ -238,7 +221,7 @@ function normalizedToDisplay(
 
 /*
  * =====================================================
- * DISPLAY UNIT LABEL
+ * DISPLAY UNIT
  * =====================================================
  */
 
@@ -268,8 +251,10 @@ function validDateString(value) {
     return null;
   }
 
+
   const date =
     new Date(value);
+
 
   if (
     Number.isNaN(
@@ -278,6 +263,7 @@ function validDateString(value) {
   ) {
     return null;
   }
+
 
   return value;
 }
@@ -308,6 +294,132 @@ function newestObservedAt(
     dates[0] ||
     null
   );
+}
+
+
+/*
+ * =====================================================
+ * FRESHNESS SUMMARY
+ * =====================================================
+ */
+
+function summarizeFreshness(
+  offers
+) {
+  if (
+    !Array.isArray(
+      offers
+    ) ||
+    !offers.length
+  ) {
+
+    return {
+      freshness: null,
+      ageDays: null,
+      needsRefresh: null
+    };
+  }
+
+
+  const freshnessOffers =
+    offers.filter(
+      offer =>
+        offer.freshness ||
+        Number.isFinite(
+          Number(
+            offer.ageDays
+          )
+        ) ||
+        typeof
+          offer.needsRefresh ===
+          "boolean"
+    );
+
+
+  if (
+    !freshnessOffers.length
+  ) {
+
+    return {
+      freshness: null,
+      ageDays: null,
+      needsRefresh: null
+    };
+  }
+
+
+  const rank = {
+    current: 1,
+    aging: 2,
+    stale: 3,
+    unknown: 4
+  };
+
+
+  let freshness =
+    "current";
+
+
+  for (
+    const offer of
+    freshnessOffers
+  ) {
+
+    const candidate =
+      offer.freshness ||
+      "unknown";
+
+
+    if (
+      (
+        rank[candidate] ||
+        99
+      ) >
+      (
+        rank[freshness] ||
+        0
+      )
+    ) {
+      freshness =
+        candidate;
+    }
+  }
+
+
+  const ages =
+    freshnessOffers
+      .map(
+        offer =>
+          Number(
+            offer.ageDays
+          )
+      )
+      .filter(
+        Number.isFinite
+      );
+
+
+  const ageDays =
+    ages.length
+      ? Math.max(
+          ...ages
+        )
+      : null;
+
+
+  const needsRefresh =
+    freshnessOffers.some(
+      offer =>
+        offer.needsRefresh ===
+        true
+    );
+
+
+  return {
+    freshness,
+    ageDays,
+    needsRefresh
+  };
 }
 
 
@@ -398,34 +510,44 @@ function parseRequest(text) {
         lbMatch[1]
       );
 
-    unit = "lb";
+    unit =
+      "lb";
 
-  } else if (ozMatch) {
+  } else if (
+    ozMatch
+  ) {
 
     qty =
       Number(
         ozMatch[1]
       );
 
-    unit = "oz";
+    unit =
+      "oz";
 
-  } else if (kgMatch) {
+  } else if (
+    kgMatch
+  ) {
 
     qty =
       Number(
         kgMatch[1]
       );
 
-    unit = "kg";
+    unit =
+      "kg";
 
-  } else if (gramMatch) {
+  } else if (
+    gramMatch
+  ) {
 
     qty =
       Number(
         gramMatch[1]
       );
 
-    unit = "g";
+    unit =
+      "g";
 
   } else if (
     gallonMatch
@@ -501,17 +623,15 @@ function parseRequest(text) {
 
   } else {
 
-    /*
-     * COUNT
-     */
-
     const leading =
       lower.match(
         /^\s*(\d+(?:\.\d+)?)\b/
       );
 
 
-    if (leading) {
+    if (
+      leading
+    ) {
       qty =
         Number(
           leading[1]
@@ -565,7 +685,8 @@ function parseRequest(text) {
       unit ===
       "each"
     ) {
-      unit = "lb";
+      unit =
+        "lb";
     }
 
 
@@ -619,7 +740,8 @@ function parseRequest(text) {
       unit ===
       "each"
     ) {
-      unit = "lb";
+      unit =
+        "lb";
     }
 
 
@@ -682,12 +804,37 @@ function parseRequest(text) {
  */
 
 function loadSeedData() {
-  const dataPath =
+  const possiblePaths = [
     path.join(
       process.cwd(),
       "data",
       "seed-prices.json"
+    ),
+
+    path.join(
+      process.cwd(),
+      "data",
+      "seedPrices.json"
+    )
+  ];
+
+
+  const dataPath =
+    possiblePaths.find(
+      candidate =>
+        fs.existsSync(
+          candidate
+        )
     );
+
+
+  if (
+    !dataPath
+  ) {
+    throw new Error(
+      "Seed price file could not be found."
+    );
+  }
 
 
   return JSON.parse(
@@ -1547,6 +1694,7 @@ function bestNormalizedPackageCombo(
             .suppliedNormalizedQty
       )
     ) {
+
       best =
         candidate;
     }
@@ -1560,9 +1708,6 @@ function bestNormalizedPackageCombo(
 /*
  * =====================================================
  * PACKAGE DISPLAY
- *
- * Preserve the response structure expected by
- * the existing front end.
  * =====================================================
  */
 
@@ -1672,7 +1817,35 @@ function buildPackageDisplay(
 
     confidenceScore:
       offer.confidenceScore ??
-      null
+      null,
+
+    /*
+     * Sprouts freshness fields.
+     *
+     * Other retailers will simply return null.
+     */
+
+    freshness:
+      offer.freshness ||
+      null,
+
+    ageDays:
+      Number.isFinite(
+        Number(
+          offer.ageDays
+        )
+      )
+        ? Number(
+            offer.ageDays
+          )
+        : null,
+
+    needsRefresh:
+      typeof
+        offer.needsRefresh ===
+        "boolean"
+          ? offer.needsRefresh
+          : null
   };
 }
 
@@ -1801,6 +1974,12 @@ function buildRetailerResult({
       : null;
 
 
+  const freshness =
+    summarizeFreshness(
+      best.picks
+    );
+
+
   return {
     retailer,
 
@@ -1856,6 +2035,19 @@ function buildRetailerResult({
         best.picks
       ),
 
+    /*
+     * NEW freshness fields.
+     */
+
+    freshness:
+      freshness.freshness,
+
+    ageDays:
+      freshness.ageDays,
+
+    needsRefresh:
+      freshness.needsRefresh,
+
     location,
 
     normalized: {
@@ -1885,7 +2077,7 @@ function buildRetailerResult({
 
 /*
  * =====================================================
- * OLD SEED OFFER -> NORMALIZED OFFER
+ * SEED OFFER -> NORMALIZED OFFER
  * =====================================================
  */
 
@@ -1981,11 +2173,6 @@ function normalizeSeedOffer(
 /*
  * =====================================================
  * SPROUTS FALLBACK EVIDENCE
- *
- * sprouts.js now prefers sprouts-evidence.json.
- *
- * These records are supplied ONLY as a safety fallback
- * if no matching dated Sprouts evidence is available.
  * =====================================================
  */
 
@@ -2075,7 +2262,7 @@ function buildSproutsFallbackEvidence(
 
 /*
  * =====================================================
- * SPROUTS RESULT EXTRACTION
+ * SPROUTS OFFER EXTRACTION
  * =====================================================
  */
 
@@ -2104,7 +2291,7 @@ function extractSproutsOffers(
         }
 
 
-        offer.rawSize =
+        const fallbackRawSize =
           offer.package
             ?.quantity != null
               ? `${
@@ -2121,6 +2308,14 @@ function extractSproutsOffers(
 
         return {
           ...offer,
+
+          /*
+           * Preserve evidence package text when available.
+           */
+
+          rawSize:
+            offer.rawSize ||
+            fallbackRawSize,
 
           matchScore:
             Number(
@@ -2148,7 +2343,35 @@ function extractSproutsOffers(
               .sourceType ||
             offer.source
               ?.type ||
-            null
+            null,
+
+          /*
+           * NEW freshness metadata coming
+           * directly from sprouts.js.
+           */
+
+          freshness:
+            offer
+              .freshness ||
+            null,
+
+          ageDays:
+            Number.isFinite(
+              Number(
+                offer.ageDays
+              )
+            )
+              ? Number(
+                  offer.ageDays
+                )
+              : null,
+
+          needsRefresh:
+            typeof
+              offer.needsRefresh ===
+              "boolean"
+                ? offer.needsRefresh
+                : null
         };
       }
     )
@@ -2377,11 +2600,11 @@ exports.handler =
           live:
             false,
 
-          mode:
-            "official-api",
+        mode:
+          "official-api",
 
-          message:
-            error.message
+        message:
+          error.message
         };
       }
 
@@ -2389,10 +2612,6 @@ exports.handler =
 /*
  * =====================================================
  * SPROUTS
- *
- * sprouts.js now controls retrieval from:
- *
- * data/sprouts-evidence.json
  * =====================================================
  */
 
@@ -2436,10 +2655,6 @@ exports.handler =
           "unknown";
 
 
-        /*
-         * Determine honest data label.
-         */
-
         let sproutsDataMode =
           "dated-retailer-evidence";
 
@@ -2451,6 +2666,7 @@ exports.handler =
           retrievalSource ===
           "supplied-fallback"
         ) {
+
           sproutsDataMode =
             "prototype-evidence-fallback";
 
@@ -2463,6 +2679,7 @@ exports.handler =
           retrievalSource ===
           "none"
         ) {
+
           sproutsDataMode =
             "no-evidence";
         }
@@ -2510,6 +2727,13 @@ exports.handler =
             );
 
 
+          const freshnessSummary =
+            adapterResult
+              ?.retrieval
+              ?.freshness ||
+            null;
+
+
           if (
             retrievalSource ===
             "sprouts-evidence-file"
@@ -2525,7 +2749,7 @@ exports.handler =
               retrievalSource,
 
               message:
-                "Sprouts pricing was loaded from the dated Sprouts evidence file and processed through the shared normalization and confidence engine.",
+                "Sprouts pricing was loaded from the dated Sprouts evidence file and processed through the shared normalization, confidence and freshness engine.",
 
               observedAt:
                 observed,
@@ -2541,6 +2765,14 @@ exports.handler =
                   ?.retrieval
                   ?.acceptedCount ??
                 sproutsOffers.length,
+
+              /*
+               * NEW:
+               * evidence freshness counts.
+               */
+
+              freshness:
+                freshnessSummary,
 
               location:
                 SPROUTS_MARKET
@@ -2572,6 +2804,9 @@ exports.handler =
               acceptedCount:
                 sproutsOffers
                   .length,
+
+              freshness:
+                freshnessSummary,
 
               location:
                 SPROUTS_MARKET
@@ -2606,6 +2841,12 @@ exports.handler =
                 ?.retrieval
                 ?.acceptedCount ??
               0,
+
+            freshness:
+              adapterResult
+                ?.retrieval
+                ?.freshness ||
+              null,
 
             loadError:
               adapterResult
@@ -2644,14 +2885,6 @@ exports.handler =
         const seedOffer of
         product.offers
       ) {
-
-        /*
-         * Kroger:
-         * official API
-         *
-         * Sprouts:
-         * retailer evidence file
-         */
 
         if (
           seedOffer.retailer ===
@@ -2824,7 +3057,7 @@ exports.handler =
             "Knoxville, TN",
 
           disclaimer:
-            "Kroger uses live official API data. Sprouts uses dated retailer evidence from the Sprouts evidence file when available, with freshness and confidence scoring. Sprouts evidence is not a live shelf-price API and may not be confirmed to the exact Knoxville store. ALDI and Earth Fare remain prototype seed data.",
+            "Kroger uses live official API data. Sprouts uses dated retailer evidence with freshness and confidence scoring. Sprouts evidence is classified as current for 0–7 days, aging for 8–14 days, and stale after 14 days. ALDI and Earth Fare remain prototype seed data.",
 
           connectors: {
 
