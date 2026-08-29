@@ -1,33 +1,504 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Grocery Optimizer Prototype</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <meta charset="UTF-8" />
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  />
+
+  <title>Toomey Grocery Optimized</title>
+
+  <link
+    rel="stylesheet"
+    href="/styles.css"
+  />
 </head>
+
 <body>
-  <main class="shell">
-    <header>
-      <p class="eyebrow">Knoxville prototype</p>
-      <h1>What do you need?</h1>
-      <p class="sub">Type one grocery item naturally. We’ll normalize the request and compare the available retailer offers.</p>
-    </header>
+  <main class="app-shell">
 
-    <form id="form" class="search">
-      <input id="query" autocomplete="off" value="3 lb organic grass-fed 85/15 ground beef" />
-      <button type="submit">Compare prices</button>
-    </form>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">
+          Weekly Grocery Optimizer
+        </p>
 
-    <p class="examples">Try: “4 organic broccoli”, “2 organic cucumbers”, “1 lb organic baby carrots”, or “2 mangoes”.</p>
+        <h1>
+          Build your list once.
+          Compare every week.
+        </h1>
 
-    <section id="status" class="status"></section>
-    <section id="results" class="results"></section>
+        <p class="hero-text">
+          Keep your regular groceries saved,
+          check items off as you shop,
+          reset the list each week,
+          and compare prices across nearby stores.
+        </p>
+      </div>
+    </section>
 
-    <footer>
-      Prototype prices are seed data for testing the optimizer. Live retailer connectors come next.
-    </footer>
+
+    <section class="panel grocery-panel">
+
+      <div class="section-header">
+        <div>
+          <p class="section-kicker">
+            My Weekly List
+          </p>
+
+          <h2>
+            Groceries to buy
+          </h2>
+        </div>
+
+        <div class="list-actions">
+          <button
+            id="resetListButton"
+            class="button button-secondary"
+            type="button"
+          >
+            Reset Weekly List
+          </button>
+        </div>
+      </div>
+
+
+      <div
+        id="groceryList"
+        class="grocery-list"
+        aria-live="polite"
+      >
+      </div>
+
+
+      <div class="add-item-card">
+
+        <div class="add-item-header">
+          <div>
+            <p class="section-kicker">
+              Add Grocery
+            </p>
+
+            <h3>
+              Add an item to your weekly list
+            </h3>
+          </div>
+        </div>
+
+
+        <div class="item-form-grid">
+
+          <label class="field field-product">
+            <span class="field-label">
+              Product
+            </span>
+
+            <select
+              id="productSelect"
+              class="select-control"
+            >
+              <option value="">
+                Select a product
+              </option>
+
+              <option
+                value="ground-beef-organic-grassfed-85-15"
+              >
+                Organic grass-fed 85/15 ground beef
+              </option>
+
+              <option
+                value="organic-broccoli"
+              >
+                Organic broccoli
+              </option>
+
+              <option
+                value="organic-cucumber"
+              >
+                Organic cucumber
+              </option>
+
+              <option
+                value="organic-baby-carrots"
+              >
+                Organic baby carrots
+              </option>
+
+              <option
+                value="organic-mango"
+              >
+                Organic mango
+              </option>
+            </select>
+          </label>
+
+
+          <label class="field">
+            <span class="field-label">
+              Quantity
+            </span>
+
+            <select
+              id="quantitySelect"
+              class="select-control"
+            >
+              <option value="0.5">
+                0.5
+              </option>
+
+              <option value="1" selected>
+                1
+              </option>
+
+              <option value="1.5">
+                1.5
+              </option>
+
+              <option value="2">
+                2
+              </option>
+
+              <option value="2.5">
+                2.5
+              </option>
+
+              <option value="3">
+                3
+              </option>
+
+              <option value="4">
+                4
+              </option>
+
+              <option value="5">
+                5
+              </option>
+
+              <option value="6">
+                6
+              </option>
+
+              <option value="8">
+                8
+              </option>
+
+              <option value="10">
+                10
+              </option>
+
+              <option value="12">
+                12
+              </option>
+            </select>
+          </label>
+
+
+          <label class="field">
+            <span class="field-label">
+              Unit
+            </span>
+
+            <select
+              id="unitSelect"
+              class="select-control"
+            >
+              <option value="each">
+                each
+              </option>
+
+              <option value="package">
+                package
+              </option>
+
+              <option value="lb">
+                lb
+              </option>
+
+              <option value="oz">
+                oz
+              </option>
+
+              <option value="g">
+                g
+              </option>
+
+              <option value="kg">
+                kg
+              </option>
+
+              <option value="fl oz">
+                fl oz
+              </option>
+
+              <option value="pint">
+                pint
+              </option>
+
+              <option value="quart">
+                quart
+              </option>
+
+              <option value="gallon">
+                gallon
+              </option>
+
+              <option value="ml">
+                ml
+              </option>
+
+              <option value="liter">
+                liter
+              </option>
+            </select>
+          </label>
+
+
+          <div class="field field-action">
+            <span
+              class="field-label field-label-spacer"
+              aria-hidden="true"
+            >
+              Add
+            </span>
+
+            <button
+              id="addItemButton"
+              class="button button-primary"
+              type="button"
+            >
+              Add Item
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="compare-bar">
+
+        <div class="compare-summary">
+          <span
+            id="remainingItemCount"
+            class="compare-count"
+          >
+            0 items to compare
+          </span>
+
+          <span class="compare-helper">
+            Checked items will be ignored.
+          </span>
+        </div>
+
+        <button
+          id="compareButton"
+          class="button button-primary button-large"
+          type="button"
+        >
+          Compare Prices
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <section
+      id="statusSection"
+      class="panel status-panel"
+      hidden
+    >
+      <div
+        id="status"
+        class="status-message"
+        aria-live="polite"
+      >
+      </div>
+    </section>
+
+
+    <section
+      id="resultsSection"
+      class="results-section"
+      hidden
+    >
+
+      <div class="section-header results-header">
+        <div>
+          <p class="section-kicker">
+            Optimized Shopping Plan
+          </p>
+
+          <h2>
+            Best ways to shop this list
+          </h2>
+        </div>
+      </div>
+
+
+      <div
+        id="results"
+        class="results-grid"
+      >
+      </div>
+
+    </section>
+
+
+    <section class="panel explanation-panel">
+
+      <div class="section-header">
+        <div>
+          <p class="section-kicker">
+            How Optimization Works
+          </p>
+
+          <h2>
+            Lowest price without losing the product you actually want
+          </h2>
+        </div>
+      </div>
+
+
+      <div class="explanation-grid">
+
+        <article class="explanation-card">
+          <span class="explanation-number">
+            1
+          </span>
+
+          <h3>
+            Lowest Cost
+          </h3>
+
+          <p>
+            Finds the cheapest valid retailer
+            for every grocery item,
+            even if that means visiting
+            multiple stores.
+          </p>
+        </article>
+
+
+        <article class="explanation-card">
+          <span class="explanation-number">
+            2
+          </span>
+
+          <h3>
+            Best Balance
+          </h3>
+
+          <p>
+            Looks for a strong combination
+            of low prices and fewer store stops.
+          </p>
+        </article>
+
+
+        <article class="explanation-card">
+          <span class="explanation-number">
+            3
+          </span>
+
+          <h3>
+            One Store
+          </h3>
+
+          <p>
+            Shows the strongest single-store
+            option when convenience matters
+            more than squeezing out every dollar.
+          </p>
+        </article>
+
+      </div>
+
+    </section>
+
   </main>
-  <script src="/app.js"></script>
+
+
+  <template id="groceryItemTemplate">
+
+    <article class="grocery-item">
+
+      <label class="grocery-check-wrap">
+
+        <input
+          class="grocery-check"
+          type="checkbox"
+        />
+
+        <span class="grocery-check-custom">
+        </span>
+
+      </label>
+
+
+      <div class="grocery-item-main">
+
+        <div class="grocery-item-product">
+        </div>
+
+        <div class="grocery-item-meta">
+        </div>
+
+      </div>
+
+
+      <button
+        class="grocery-remove"
+        type="button"
+        aria-label="Remove grocery item"
+      >
+        Remove
+      </button>
+
+    </article>
+
+  </template>
+
+
+  <template id="optimizationCardTemplate">
+
+    <article class="optimization-card">
+
+      <div class="optimization-card-header">
+
+        <div>
+          <p class="optimization-label">
+          </p>
+
+          <h3 class="optimization-title">
+          </h3>
+        </div>
+
+        <div class="optimization-total">
+        </div>
+
+      </div>
+
+
+      <div class="optimization-meta">
+      </div>
+
+
+      <div class="optimization-stores">
+      </div>
+
+    </article>
+
+  </template>
+
+
+  <script
+    src="/app.js"
+    defer
+  ></script>
+
 </body>
 </html>
