@@ -6,7 +6,6 @@ const {
   normalizeRequest,
   normalizeOffer,
   detectAttributes,
-  scoreProductMatch,
   calculatePackageRequirement
 } = require("./lib/normalize");
 
@@ -82,9 +81,7 @@ function round(
     Number(value);
 
   if (
-    !Number.isFinite(
-      number
-    )
+    !Number.isFinite(number)
   ) {
     return null;
   }
@@ -103,22 +100,17 @@ function round(
 function cleanText(
   value
 ) {
-  return String(
-    value || ""
-  )
+  return String(value || "")
     .trim()
     .toLowerCase()
-    .replace(
-      /\s+/g,
-      " "
-    );
+    .replace(/\s+/g, " ");
 }
 
 
 function normalizedToDisplay(
   quantity,
   normalizedUnit,
-  displayUnit
+  requestedDisplayUnit
 ) {
   const qty =
     Number(quantity);
@@ -129,19 +121,43 @@ function normalizedToDisplay(
     return null;
   }
 
+  const display =
+    normalizeUnit(
+      requestedDisplayUnit
+    );
+
   if (
-    normalizedUnit === "oz" &&
-    displayUnit === "lb"
+    normalizedUnit === "oz"
   ) {
-    return qty / 16;
+    switch (display) {
+      case "lb":
+        return qty / 16;
+
+      case "oz":
+        return qty;
+
+      case "g":
+        return qty * 28.349523125;
+
+      case "kg":
+        return (
+          qty *
+          28.349523125 /
+          1000
+        );
+
+      default:
+        return qty;
+    }
   }
 
   if (
     normalizedUnit === "fl_oz"
   ) {
-    switch (
-      displayUnit
-    ) {
+    switch (display) {
+      case "fl_oz":
+        return qty;
+
       case "pint":
         return qty / 16;
 
@@ -151,8 +167,15 @@ function normalizedToDisplay(
       case "gallon":
         return qty / 128;
 
-      case "fl_oz":
-        return qty;
+      case "ml":
+        return qty * 29.5735295625;
+
+      case "liter":
+        return (
+          qty *
+          29.5735295625 /
+          1000
+        );
 
       default:
         return qty;
@@ -170,8 +193,7 @@ function displayUnit(
     normalizeUnit(unit);
 
   if (
-    normalized ===
-    "fl_oz"
+    normalized === "fl_oz"
   ) {
     return "fl oz";
   }
@@ -200,9 +222,10 @@ function newestObservedAt(
   offers
 ) {
   const dates =
-    (Array.isArray(offers)
-      ? offers
-      : []
+    (
+      Array.isArray(offers)
+        ? offers
+        : []
     )
       .map(
         offer =>
@@ -232,7 +255,7 @@ function newestObservedAt(
 
 /*
  * =====================================================
- * FRESHNESS SUMMARY FOR CHOSEN PACKAGES
+ * FRESHNESS SUMMARY
  * =====================================================
  */
 
@@ -365,19 +388,14 @@ function parseRequest(
   text
 ) {
   const raw =
-    String(
-      text || ""
-    ).trim();
+    String(text || "")
+      .trim();
 
   const lower =
     cleanText(raw);
 
   let qty = 1;
   let unit = "each";
-
-  /*
-   * Weight
-   */
 
   let match =
     lower.match(
@@ -392,8 +410,8 @@ function parseRequest(
 
     unit =
       "lb";
-  } else {
 
+  } else {
     match =
       lower.match(
         /(\d+(?:\.\d+)?)\s*(oz|ounce|ounces)\b/
@@ -409,11 +427,6 @@ function parseRequest(
         "oz";
     }
   }
-
-
-  /*
-   * Count
-   */
 
   if (
     unit === "each"
@@ -433,17 +446,11 @@ function parseRequest(
     }
   }
 
-
-  /*
-   * Canonical product
-   */
-
   let canonical =
     null;
 
   let krogerTerm =
     raw;
-
 
   if (
     lower.includes(
@@ -531,12 +538,8 @@ function parseRequest(
         : "mango";
   }
 
-
   const attributes =
-    detectAttributes(
-      raw
-    );
-
+    detectAttributes(raw);
 
   let normalized =
     null;
@@ -561,20 +564,13 @@ function parseRequest(
       });
   }
 
-
   return {
     raw,
-
     qty,
-
     unit,
-
     canonical,
-
     krogerTerm,
-
     attributes,
-
     normalized
   };
 }
@@ -582,10 +578,10 @@ function parseRequest(
 
 /*
  * =====================================================
- * SEED DATA
+ * PRODUCT REGISTRY
  *
- * Still used as our canonical product registry.
- * Retailer pricing no longer comes from seed data.
+ * Seed file remains only as the canonical product
+ * registry. Retailer prices do not come from seed data.
  * =====================================================
  */
 
@@ -641,7 +637,7 @@ function loadSeedData() {
       error
     ) {
       /*
-       * Keep checking alternate path.
+       * Try the next path.
        */
     }
   }
@@ -869,7 +865,7 @@ async function findTargetKroger() {
 
 /*
  * =====================================================
- * KROGER PRODUCT HELPERS
+ * KROGER PRICE
  * =====================================================
  */
 
@@ -938,6 +934,12 @@ function extractPrice(
 }
 
 
+/*
+ * =====================================================
+ * KROGER PRODUCT MATCH
+ * =====================================================
+ */
+
 function scoreKrogerProduct(
   product,
   parsed
@@ -952,12 +954,10 @@ function scoreKrogerProduct(
         .join(" ")
     );
 
-  let score =
-    0;
+  let score = 0;
 
   const canonical =
     parsed.canonical;
-
 
   if (
     canonical ===
@@ -1006,7 +1006,6 @@ function scoreKrogerProduct(
     return score;
   }
 
-
   if (
     canonical ===
     "organic-broccoli"
@@ -1030,7 +1029,6 @@ function scoreKrogerProduct(
     return score;
   }
 
-
   if (
     canonical ===
     "organic-cucumber"
@@ -1053,7 +1051,6 @@ function scoreKrogerProduct(
 
     return score;
   }
-
 
   if (
     canonical ===
@@ -1086,7 +1083,6 @@ function scoreKrogerProduct(
     return score;
   }
 
-
   if (
     canonical ===
     "mango"
@@ -1112,20 +1108,18 @@ function scoreKrogerProduct(
     return score;
   }
 
-
   return score;
 }
 
 
 /*
  * =====================================================
- * KROGER OFFER NORMALIZATION
+ * LIVE KROGER SEARCH
  * =====================================================
  */
 
 async function searchLiveKroger(
-  parsed,
-  productSeed
+  parsed
 ) {
   const store =
     await findTargetKroger();
@@ -1196,10 +1190,12 @@ async function searchLiveKroger(
       }
 
       /*
-       * Important:
-       * description is passed before size so normalize.js
-       * can correctly detect products such as the Kroger
-       * 3 lb ground-beef multipack.
+       * Product description is intentionally included
+       * before item.size. normalize.js uses that to
+       * correctly detect multipacks such as:
+       *
+       * 3 LB BIG DEAL
+       * size: 3 ct / 1 lb
        */
 
       const normalized =
@@ -1287,32 +1283,62 @@ async function searchLiveKroger(
         retailer:
           "Kroger",
 
+        product:
+          normalized.title,
+
         title:
           normalized.title,
 
         brand:
-          normalized.brand,
+          normalized.brand ||
+          null,
 
         productId:
-          normalized.productId,
+          normalized.productId ||
+          null,
 
         package:
           normalized.package,
 
+        package_qty:
+          normalized.package
+            ?.quantity ??
+          null,
+
+        package_unit:
+          normalized.package
+            ?.displayUnit ||
+          normalized.package
+            ?.unit ||
+          null,
+
+        normalized_package_qty:
+          normalized.package
+            ?.normalizedQuantity ??
+          null,
+
+        normalized_package_unit:
+          normalized.package
+            ?.normalizedUnit ||
+          null,
+
+        rawSize:
+          normalized.package
+            ?.raw ||
+          item.size ||
+          null,
+
+        size:
+          normalized.package
+            ?.raw ||
+          item.size ||
+          null,
+
         price:
+          priceInfo.amount,
+
+        normalizedPrice:
           normalized.price,
-
-        matchScore:
-          100,
-
-        confidenceScore:
-          100,
-
-        totalCost:
-          packagePlan.totalCost,
-
-        purchasePlan:
-          packagePlan,
 
         regularPrice:
           priceInfo.regular,
@@ -1320,28 +1346,59 @@ async function searchLiveKroger(
         priceType:
           priceInfo.type,
 
+        match:
+          "exact",
+
+        matchScore:
+          100,
+
+        confidenceScore:
+          100,
+
+        source_type:
+          "kroger-live-api",
+
         sourceType:
           "kroger-live-api",
 
-        source:
-          {
-            type:
-              "kroger-live-api"
-          },
+        source: {
+          type:
+            "kroger-live-api",
 
-        location:
-          {
-            locationId:
-              store.locationId,
+          observedAt:
+            null
+        },
 
-            name:
-              store.name,
+        observedAt:
+          null,
 
-            address:
-              store.address
-          },
+        freshness:
+          null,
 
-        score
+        ageDays:
+          null,
+
+        needsRefresh:
+          null,
+
+        location: {
+          locationId:
+            store.locationId,
+
+          name:
+            store.name,
+
+          address:
+            store.address
+        },
+
+        score,
+
+        purchasePlan:
+          packagePlan,
+
+        totalCost:
+          packagePlan.totalCost
       });
     }
   }
@@ -1382,7 +1439,7 @@ async function searchLiveKroger(
 
 /*
  * =====================================================
- * EVIDENCE OFFER -> COMPARISON OFFER
+ * EVIDENCE OFFER -> COMMON OFFER SHAPE
  * =====================================================
  */
 
@@ -1416,9 +1473,14 @@ function extractEvidenceOffers(
         offer.productId ||
         null,
 
+      package:
+        offer.package ||
+        null,
+
       package_qty:
         offer.package
-          ?.quantity,
+          ?.quantity ??
+        null,
 
       package_unit:
         offer.package
@@ -1429,11 +1491,19 @@ function extractEvidenceOffers(
 
       normalized_package_qty:
         offer.package
-          ?.normalizedQuantity,
+          ?.normalizedQuantity ??
+        null,
 
       normalized_package_unit:
         offer.package
-          ?.normalizedUnit,
+          ?.normalizedUnit ||
+        null,
+
+      rawSize:
+        offer.rawSize ||
+        offer.package
+          ?.raw ||
+        null,
 
       size:
         offer.rawSize ||
@@ -1442,8 +1512,14 @@ function extractEvidenceOffers(
         null,
 
       price:
-        offer.price
-          ?.total,
+        Number(
+          offer.price
+            ?.total
+        ),
+
+      normalizedPrice:
+        offer.price ||
+        null,
 
       regularPrice:
         null,
@@ -1452,6 +1528,12 @@ function extractEvidenceOffers(
         null,
 
       source_type:
+        offer.sourceType ||
+        offer.source
+          ?.type ||
+        "retailer-evidence",
+
+      sourceType:
         offer.sourceType ||
         offer.source
           ?.type ||
@@ -1522,28 +1604,69 @@ function extractEvidenceOffers(
 
 /*
  * =====================================================
- * RESULT BUILDING
+ * PACKAGE DISPLAY
  * =====================================================
  */
 
 function buildPackageDisplay(
   pick
 ) {
+  const packageInfo =
+    pick.package ||
+    null;
+
   const plan =
     pick.purchasePlan ||
     null;
 
-  const packagesNeeded =
+  const packageQty =
     Number(
-      plan
-        ?.packagesNeeded ||
+      pick.package_qty ??
+      packageInfo?.quantity ??
       1
     );
 
-  const packageQty =
+  const packageUnit =
+    pick.package_unit ||
+    packageInfo?.displayUnit ||
+    packageInfo?.unit ||
+    null;
+
+  const size =
+    pick.rawSize ||
+    pick.size ||
+    packageInfo?.raw ||
+    (
+      Number.isFinite(
+        packageQty
+      ) &&
+      packageUnit
+        ? `${packageQty} ${packageUnit}`
+        : null
+    );
+
+  let price =
     Number(
-      pick.package_qty ||
-      1
+      pick.price
+    );
+
+  if (
+    !Number.isFinite(price)
+  ) {
+    price =
+      Number(
+        pick.normalizedPrice
+          ?.total
+      );
+  }
+
+  const packagesNeeded =
+    Math.max(
+      1,
+      Number(
+        plan?.packagesNeeded ||
+        1
+      )
     );
 
   return {
@@ -1557,20 +1680,20 @@ function buildPackageDisplay(
       null,
 
     packageQty:
-      packageQty,
+      Number.isFinite(
+        packageQty
+      )
+        ? packageQty
+        : 1,
 
-    packageUnit:
-      pick.package_unit ||
-      null,
+    packageUnit,
 
-    size:
-      pick.size ||
-      null,
+    size,
 
     price:
-      Number(
-        pick.price
-      ),
+      Number.isFinite(price)
+        ? price
+        : null,
 
     regularPrice:
       pick.regularPrice ||
@@ -1582,14 +1705,20 @@ function buildPackageDisplay(
 
     sourceType:
       pick.source_type ||
+      pick.sourceType ||
+      pick.source?.type ||
       null,
 
     observedAt:
       pick.observedAt ||
+      pick.source
+        ?.observedAt ||
       null,
 
     sourceUrl:
       pick.sourceUrl ||
+      pick.source
+        ?.url ||
       null,
 
     productId:
@@ -1644,6 +1773,12 @@ function buildPackageDisplay(
 }
 
 
+/*
+ * =====================================================
+ * RETAILER RESULT
+ * =====================================================
+ */
+
 function buildRetailerResult(
   retailer,
   offers,
@@ -1661,13 +1796,6 @@ function buildRetailerResult(
     return null;
   }
 
-  /*
-   * Every normalized evidence/API offer already includes
-   * its required purchase plan for the full request.
-   *
-   * Choose the lowest actual total cost.
-   */
-
   const sorted =
     [...offers].sort(
       (a, b) =>
@@ -1677,6 +1805,7 @@ function buildRetailerResult(
         Number(
           b.totalCost
         ) ||
+
         Number(
           b.matchScore ||
           0
@@ -1685,6 +1814,7 @@ function buildRetailerResult(
           a.matchScore ||
           0
         ) ||
+
         Number(
           b.confidenceScore ||
           0
@@ -1717,6 +1847,11 @@ function buildRetailerResult(
       )
     );
 
+  /*
+   * Preserve the existing frontend contract:
+   * one entry for every physical package required.
+   */
+
   const picks =
     Array.from(
       {
@@ -1736,17 +1871,16 @@ function buildRetailerResult(
     request.normalized
       .normalizedUnit;
 
-  const display =
-    request.unit;
-
   const requestedNormalized =
     request.normalized
       .normalizedQuantity;
 
   const suppliedNormalized =
     Number(
-      plan.suppliedNormalizedQuantity ??
-      plan.suppliedQuantity ??
+      plan
+        .suppliedNormalizedQuantity ??
+      plan
+        .suppliedQuantity ??
       (
         best.package
           ?.normalizedQuantity *
@@ -1758,14 +1892,14 @@ function buildRetailerResult(
     normalizedToDisplay(
       requestedNormalized,
       normalizedUnit,
-      display
+      request.unit
     );
 
   const suppliedDisplay =
     normalizedToDisplay(
       suppliedNormalized,
       normalizedUnit,
-      display
+      request.unit
     );
 
   const matchScore =
@@ -1801,7 +1935,7 @@ function buildRetailerResult(
 
     requestedUnit:
       displayUnit(
-        display
+        request.unit
       ),
 
     totalQty:
@@ -1838,6 +1972,7 @@ function buildRetailerResult(
     retrievalSource:
       options.retrievalSource ||
       best.source_type ||
+      best.sourceType ||
       null,
 
     observedAt:
@@ -1886,7 +2021,7 @@ function buildRetailerResult(
 
 /*
  * =====================================================
- * CONNECTOR STATUS
+ * EVIDENCE CONNECTOR STATUS
  * =====================================================
  */
 
@@ -1957,7 +2092,7 @@ function buildEvidenceConnectorStatus(
 
 /*
  * =====================================================
- * HANDLER
+ * MAIN HANDLER
  * =====================================================
  */
 
@@ -1977,7 +2112,6 @@ exports.handler =
           text
         );
 
-
       if (
         !parsed.canonical
       ) {
@@ -1995,10 +2129,8 @@ exports.handler =
         );
       }
 
-
       const seed =
         loadSeedData();
-
 
       const product =
         seed.products.find(
@@ -2006,7 +2138,6 @@ exports.handler =
             item.canonical_id ===
             parsed.canonical
         );
-
 
       if (
         !product
@@ -2023,14 +2154,13 @@ exports.handler =
         );
       }
 
-
       const results =
         [];
 
 
       /*
        * =================================================
-       * KROGER LIVE API
+       * KROGER
        * =================================================
        */
 
@@ -2045,14 +2175,11 @@ exports.handler =
           "Kroger live connector was not attempted."
       };
 
-
       try {
         const live =
           await searchLiveKroger(
-            parsed,
-            product
+            parsed
           );
-
 
         if (
           live.offers.length
@@ -2092,7 +2219,6 @@ exports.handler =
               }
             );
 
-
           if (
             result
           ) {
@@ -2100,7 +2226,6 @@ exports.handler =
               result
             );
           }
-
 
           krogerStatus = {
             live:
@@ -2160,7 +2285,7 @@ exports.handler =
 
       /*
        * =================================================
-       * SPROUTS EVIDENCE
+       * SPROUTS
        * =================================================
        */
 
@@ -2178,29 +2303,23 @@ exports.handler =
           "Sprouts evidence connector was not attempted."
       };
 
-
       try {
         const adapterResult =
           await getSproutsOffers(
             parsed.normalized
           );
 
-
         const offers =
           extractEvidenceOffers(
             adapterResult
           );
 
-
         sproutsStatus =
           buildEvidenceConnectorStatus(
             "Sprouts",
-
             adapterResult,
-
             SPROUTS_MARKET
           );
-
 
         const result =
           buildRetailerResult(
@@ -2226,7 +2345,6 @@ exports.handler =
                 SPROUTS_MARKET
             }
           );
-
 
         if (
           result
@@ -2260,7 +2378,7 @@ exports.handler =
 
       /*
        * =================================================
-       * ALDI EVIDENCE
+       * ALDI
        * =================================================
        */
 
@@ -2278,29 +2396,23 @@ exports.handler =
           "ALDI evidence connector was not attempted."
       };
 
-
       try {
         const adapterResult =
           await getAldiOffers(
             parsed.normalized
           );
 
-
         const offers =
           extractEvidenceOffers(
             adapterResult
           );
 
-
         aldiStatus =
           buildEvidenceConnectorStatus(
             "ALDI",
-
             adapterResult,
-
             ALDI_MARKET
           );
-
 
         const result =
           buildRetailerResult(
@@ -2326,7 +2438,6 @@ exports.handler =
                 ALDI_MARKET
             }
           );
-
 
         if (
           result
@@ -2360,7 +2471,7 @@ exports.handler =
 
       /*
        * =================================================
-       * EARTH FARE EVIDENCE
+       * EARTH FARE
        * =================================================
        */
 
@@ -2378,29 +2489,23 @@ exports.handler =
           "Earth Fare evidence connector was not attempted."
       };
 
-
       try {
         const adapterResult =
           await getEarthFareOffers(
             parsed.normalized
           );
 
-
         const offers =
           extractEvidenceOffers(
             adapterResult
           );
 
-
         earthFareStatus =
           buildEvidenceConnectorStatus(
             "Earth Fare",
-
             adapterResult,
-
             EARTH_FARE_MARKET
           );
-
 
         const result =
           buildRetailerResult(
@@ -2426,7 +2531,6 @@ exports.handler =
                 EARTH_FARE_MARKET
             }
           );
-
 
         if (
           result
@@ -2460,7 +2564,7 @@ exports.handler =
 
       /*
        * =================================================
-       * SORT BY ACTUAL PURCHASE COST
+       * SORT
        * =================================================
        */
 
