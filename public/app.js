@@ -1,21 +1,15 @@
 /*
- * Grocery Optimizer
+ * Toomey Grocery Optimized
  * public/app.js
  *
- * Weekly grocery-list UI + basket optimization
- * + custom products + pricing coverage status.
- *
- * Existing storage preserved:
- *   toomey-grocery-weekly-list-v1
- *   toomey-custom-products-v1
- *
- * Additional storage:
- *   toomey-pricing-status-v1
+ * Weekly grocery list
+ * Custom products
+ * Pricing coverage
+ * Lowest Cost / Best Balance / One Store optimization
  */
 
 (() => {
   "use strict";
-
 
   /*
    * =====================================================
@@ -32,156 +26,133 @@
   const PRICING_STATUS_KEY =
     "toomey-pricing-status-v1";
 
-
-  /*
-   * Best Balance intentionally treats each additional
-   * store as roughly $5 of inconvenience.
-   *
-   * This affects plan selection only.
-   * Displayed grocery totals remain actual grocery cost.
-   */
-
   const STOP_PENALTY = 5;
 
 
   /*
    * =====================================================
-   * DOM HELPERS
-   *
-   * Several alternate IDs are supported so this file
-   * remains tolerant of our previous frontend versions.
+   * DOM
    * =====================================================
    */
 
-  function firstElement(...selectors) {
-    for (const selector of selectors) {
-      const element =
-        document.querySelector(selector);
-
-      if (element) {
-        return element;
-      }
-    }
-
-    return null;
-  }
-
-
   const productSelect =
-    firstElement(
-      "#productSelect",
-      "#product",
-      "[data-product-select]"
+    document.getElementById(
+      "productSelect"
     );
 
   const quantitySelect =
-    firstElement(
-      "#quantitySelect",
-      "#quantity",
-      "[data-quantity-select]"
+    document.getElementById(
+      "quantitySelect"
     );
 
   const unitSelect =
-    firstElement(
-      "#unitSelect",
-      "#unit",
-      "[data-unit-select]"
+    document.getElementById(
+      "unitSelect"
     );
 
-  const addButton =
-    firstElement(
-      "#addItem",
-      "#addItemBtn",
-      "#addButton",
-      "[data-add-item]"
+  const addItemButton =
+    document.getElementById(
+      "addItemButton"
+    );
+
+  const resetListButton =
+    document.getElementById(
+      "resetListButton"
     );
 
   const compareButton =
-    firstElement(
-      "#compareButton",
-      "#compareBtn",
-      "#compare",
-      "[data-compare]"
+    document.getElementById(
+      "compareButton"
     );
 
-  const resetButton =
-    firstElement(
-      "#resetWeek",
-      "#resetWeeklyList",
-      "#resetButton",
-      "[data-reset-week]"
+  const groceryList =
+    document.getElementById(
+      "groceryList"
     );
 
-  const listContainer =
-    firstElement(
-      "#weeklyList",
-      "#groceryList",
-      "#listContainer",
-      "[data-weekly-list]"
-    );
-
-  const resultsContainer =
-    firstElement(
-      "#results",
-      "#comparisonResults",
-      "#resultsContainer",
-      "[data-results]"
-    );
-
-  const statusContainer =
-    firstElement(
-      "#status",
-      "#compareStatus",
-      "[data-status]"
+  const remainingItemCount =
+    document.getElementById(
+      "remainingItemCount"
     );
 
 
   /*
-   * Custom-product controls.
+   * Status + results
    */
 
-  const customToggleButton =
-    firstElement(
-      "#showCustomProduct",
-      "#customProductButton",
-      "#addCustomProduct",
-      "[data-show-custom-product]"
+  const statusSection =
+    document.getElementById(
+      "statusSection"
     );
 
-  const customPanel =
-    firstElement(
-      "#customProductPanel",
-      "#customPanel",
-      "[data-custom-product-panel]"
+  const status =
+    document.getElementById(
+      "status"
     );
 
-  const customNameInput =
-    firstElement(
-      "#customProductName",
-      "#customName",
-      "[data-custom-name]"
+  const resultsSection =
+    document.getElementById(
+      "resultsSection"
     );
 
-  const customCategorySelect =
-    firstElement(
-      "#customProductCategory",
-      "#customCategory",
-      "[data-custom-category]"
+  const results =
+    document.getElementById(
+      "results"
     );
 
-  const customUnitSelect =
-    firstElement(
-      "#customProductUnit",
-      "#customDefaultUnit",
-      "#customUnit",
-      "[data-custom-unit]"
+
+  /*
+   * Custom product form
+   */
+
+  const openCustomProductButton =
+    document.getElementById(
+      "openCustomProductButton"
     );
 
-  const saveCustomButton =
-    firstElement(
-      "#saveCustomProduct",
-      "#saveCustomButton",
-      "[data-save-custom-product]"
+  const closeCustomProductButton =
+    document.getElementById(
+      "closeCustomProductButton"
+    );
+
+  const customProductPanel =
+    document.getElementById(
+      "customProductPanel"
+    );
+
+  const customProductName =
+    document.getElementById(
+      "customProductName"
+    );
+
+  const customProductCategory =
+    document.getElementById(
+      "customProductCategory"
+    );
+
+  const customProductDefaultUnit =
+    document.getElementById(
+      "customProductDefaultUnit"
+    );
+
+  const saveCustomProductButton =
+    document.getElementById(
+      "saveCustomProductButton"
+    );
+
+
+  /*
+   * Templates
+   */
+
+  const groceryItemTemplate =
+    document.getElementById(
+      "groceryItemTemplate"
+    );
+
+  const optimizationCardTemplate =
+    document.getElementById(
+      "optimizationCardTemplate"
     );
 
 
@@ -191,7 +162,8 @@
    * =====================================================
    */
 
-  let BASE_PRODUCT_LIST = [];
+  let baseProducts = [];
+
   let customProducts =
     loadJSON(
       CUSTOM_PRODUCTS_KEY,
@@ -210,19 +182,16 @@
       {}
     );
 
-  let PRODUCT_LIST = [];
-  let PRODUCTS = {};
+  let products = [];
 
-  let evidenceRefreshData =
-    null;
+  let productMap = {};
 
-  let compareInProgress =
-    false;
+  let comparing = false;
 
 
   /*
    * =====================================================
-   * BASIC HELPERS
+   * HELPERS
    * =====================================================
    */
 
@@ -257,37 +226,10 @@
   ) {
     localStorage.setItem(
       key,
-      JSON.stringify(value)
+      JSON.stringify(
+        value
+      )
     );
-  }
-
-
-  function escapeHtml(
-    value
-  ) {
-    return String(
-      value ?? ""
-    )
-      .replace(
-        /&/g,
-        "&amp;"
-      )
-      .replace(
-        /</g,
-        "&lt;"
-      )
-      .replace(
-        />/g,
-        "&gt;"
-      )
-      .replace(
-        /"/g,
-        "&quot;"
-      )
-      .replace(
-        /'/g,
-        "&#039;"
-      );
   }
 
 
@@ -347,7 +289,9 @@
       Number(value);
 
     if (
-      !Number.isFinite(number)
+      !Number.isFinite(
+        number
+      )
     ) {
       return "—";
     }
@@ -374,9 +318,11 @@
       Number(value);
 
     if (
-      !Number.isFinite(number)
+      !Number.isFinite(
+        number
+      )
     ) {
-      return null;
+      return 0;
     }
 
     const factor =
@@ -384,8 +330,10 @@
 
     return (
       Math.round(
-        number * factor
-      ) / factor
+        number *
+        factor
+      ) /
+      factor
     );
   }
 
@@ -395,7 +343,9 @@
   ) {
     return [
       ...new Set(
-        values.filter(Boolean)
+        values.filter(
+          Boolean
+        )
       )
     ];
   }
@@ -404,45 +354,9 @@
   function productById(
     id
   ) {
-    return PRODUCTS[id] ||
-      null;
-  }
-
-
-  function itemProduct(
-    item
-  ) {
     return (
-      productById(
-        item.productId
-      ) || {
-        id:
-          item.productId,
-
-        label:
-          item.label ||
-          item.productId,
-
-        queryName:
-          item.queryName ||
-          item.label ||
-          item.productId,
-
-        category:
-          "Custom",
-
-        defaultUnit:
-          item.unit ||
-          "each",
-
-        allowedUnits: [
-          item.unit ||
-          "each"
-        ],
-
-        custom:
-          true
-      }
+      productMap[id] ||
+      null
     );
   }
 
@@ -473,55 +387,53 @@
 
   /*
    * =====================================================
+   * STATUS
+   * =====================================================
+   */
+
+  function showStatus(
+    message
+  ) {
+    if (
+      !statusSection ||
+      !status
+    ) {
+      return;
+    }
+
+    status.textContent =
+      message;
+
+    statusSection.hidden =
+      false;
+  }
+
+
+  function hideStatus() {
+    if (
+      statusSection
+    ) {
+      statusSection.hidden =
+        true;
+    }
+  }
+
+
+  /*
+   * =====================================================
    * PRODUCT CATALOG
    * =====================================================
    */
 
-  async function loadProducts() {
-    try {
-      const response =
-        await fetch(
-          "products.json",
-          {
-            cache:
-              "no-store"
-          }
-        );
-
-      if (!response.ok) {
-        throw new Error(
-          `products.json returned ${response.status}`
-        );
-      }
-
-      const data =
-        await response.json();
-
-      BASE_PRODUCT_LIST =
-        Array.isArray(data)
-          ? data
-          : [];
-
-    } catch (
-      error
-    ) {
-      console.error(
-        "Could not load products.json:",
-        error
-      );
-
-      BASE_PRODUCT_LIST =
-        [];
-    }
-
-    rebuildProductCatalog();
-  }
-
-
-  function normalizeCatalogProduct(
+  function normalizeProduct(
     product,
     custom = false
   ) {
+    const defaultUnit =
+      product.defaultUnit ||
+      product.unit ||
+      "each";
+
     const id =
       product.id ||
       (
@@ -535,11 +447,6 @@
               product.queryName
             )
       );
-
-    const defaultUnit =
-      product.defaultUnit ||
-      product.unit ||
-      "each";
 
     return {
       ...product,
@@ -564,7 +471,7 @@
         product.category ||
         (
           custom
-            ? "Custom"
+            ? "Other"
             : "Other"
         ),
 
@@ -589,33 +496,74 @@
   }
 
 
-  function rebuildProductCatalog() {
-    const base =
-      BASE_PRODUCT_LIST.map(
+  async function loadProducts() {
+    try {
+      const response =
+        await fetch(
+          "/products.json",
+          {
+            cache:
+              "no-store"
+          }
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          `products.json returned ${response.status}`
+        );
+      }
+
+      const data =
+        await response.json();
+
+      baseProducts =
+        Array.isArray(data)
+          ? data
+          : [];
+
+    } catch (
+      error
+    ) {
+      console.error(
+        "Could not load products:",
+        error
+      );
+
+      baseProducts =
+        [];
+    }
+
+    rebuildCatalog();
+  }
+
+
+  function rebuildCatalog() {
+    const normalizedBase =
+      baseProducts.map(
         product =>
-          normalizeCatalogProduct(
+          normalizeProduct(
             product,
             false
           )
       );
 
-    const custom =
+    const normalizedCustom =
       customProducts.map(
         product =>
-          normalizeCatalogProduct(
+          normalizeProduct(
             product,
             true
           )
       );
 
-    PRODUCT_LIST = [
-      ...base,
-      ...custom
+    products = [
+      ...normalizedBase,
+      ...normalizedCustom
     ];
 
-    PRODUCTS =
+    productMap =
       Object.fromEntries(
-        PRODUCT_LIST.map(
+        products.map(
           product => [
             product.id,
             product
@@ -623,7 +571,7 @@
         )
       );
 
-    renderProductOptions();
+    renderProductDropdown();
   }
 
 
@@ -633,51 +581,55 @@
    * =====================================================
    */
 
-  function renderProductOptions() {
+  function renderProductDropdown() {
     if (!productSelect) {
       return;
     }
 
-    const current =
+    const previous =
       productSelect.value;
 
-    const groups =
+    productSelect.innerHTML =
+      `
+        <option value="">
+          Select a product
+        </option>
+      `;
+
+    const categories =
       new Map();
+
 
     for (
       const product of
-      PRODUCT_LIST
+      products
     ) {
-      const category =
-        product.category ||
-        "Other";
-
       if (
-        !groups.has(
-          category
+        !categories.has(
+          product.category
         )
       ) {
-        groups.set(
-          category,
+        categories.set(
+          product.category,
           []
         );
       }
 
-      groups
-        .get(category)
-        .push(product);
+      categories
+        .get(
+          product.category
+        )
+        .push(
+          product
+        );
     }
-
-
-    productSelect.innerHTML =
-      `<option value="">Choose a product</option>`;
 
 
     for (
       const [
         category,
-        products
-      ] of groups
+        categoryProducts
+      ] of categories
     ) {
       const optgroup =
         document.createElement(
@@ -687,9 +639,10 @@
       optgroup.label =
         category;
 
+
       for (
         const product of
-        products
+        categoryProducts
       ) {
         const option =
           document.createElement(
@@ -709,6 +662,7 @@
         );
       }
 
+
       productSelect.appendChild(
         optgroup
       );
@@ -716,97 +670,118 @@
 
 
     if (
-      current &&
-      PRODUCTS[current]
+      previous &&
+      productMap[
+        previous
+      ]
     ) {
       productSelect.value =
-        current;
+        previous;
     }
 
-    syncUnitsToSelectedProduct();
+    syncUnitDropdown();
   }
 
 
   /*
    * =====================================================
-   * UNIT DROPDOWN
+   * QUANTITY DROPDOWN
    * =====================================================
    */
 
-  const UNIT_LABELS = {
-    each:
-      "each",
+  function populateQuantityDropdown() {
+    if (!quantitySelect) {
+      return;
+    }
 
-    package:
-      "package",
+    const previous =
+      quantitySelect.value;
 
-    lb:
-      "lb",
+    const values = [
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2,
+      2.5,
+      3,
+      4,
+      5,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20
+    ];
 
-    oz:
-      "oz",
+    quantitySelect.innerHTML =
+      "";
 
-    g:
-      "g",
+    for (
+      const quantity of
+      values
+    ) {
+      const option =
+        document.createElement(
+          "option"
+        );
 
-    kg:
-      "kg",
+      option.value =
+        String(
+          quantity
+        );
 
-    "fl oz":
-      "fl oz",
+      option.textContent =
+        String(
+          quantity
+        );
 
-    fl_oz:
-      "fl oz",
+      quantitySelect.appendChild(
+        option
+      );
+    }
 
-    pint:
-      "pint",
 
-    quart:
-      "quart",
+    if (
+      values
+        .map(String)
+        .includes(
+          previous
+        )
+    ) {
+      quantitySelect.value =
+        previous;
 
-    gallon:
-      "gallon",
+    } else {
+      quantitySelect.value =
+        "1";
+    }
+  }
 
-    ml:
-      "ml",
 
-    liter:
-      "liter",
-
-    dozen:
-      "dozen",
-
-    can:
-      "can",
-
-    jar:
-      "jar",
-
-    bottle:
-      "bottle",
-
-    loaf:
-      "loaf",
-
-    bag:
-      "bag",
-
-    roll:
-      "roll"
-  };
-
+  /*
+   * =====================================================
+   * UNITS
+   * =====================================================
+   */
 
   function unitLabel(
     unit
   ) {
-    return (
-      UNIT_LABELS[unit] ||
-      unit
-    );
+    if (
+      unit ===
+      "fl_oz"
+    ) {
+      return "fl oz";
+    }
+
+    return unit;
   }
 
 
-  function syncUnitsToSelectedProduct() {
+  function syncUnitDropdown() {
     if (
       !productSelect ||
       !unitSelect
@@ -815,9 +790,9 @@
     }
 
     const product =
-      PRODUCTS[
+      productById(
         productSelect.value
-      ];
+      );
 
     if (!product) {
       return;
@@ -831,11 +806,12 @@
         ]
       );
 
-    const previous =
+    const oldValue =
       unitSelect.value;
 
     unitSelect.innerHTML =
       "";
+
 
     for (
       const unit of
@@ -850,20 +826,23 @@
         unit;
 
       option.textContent =
-        unitLabel(unit);
+        unitLabel(
+          unit
+        );
 
       unitSelect.appendChild(
         option
       );
     }
 
+
     if (
       allowedUnits.includes(
-        previous
+        oldValue
       )
     ) {
       unitSelect.value =
-        previous;
+        oldValue;
 
     } else {
       unitSelect.value =
@@ -875,441 +854,48 @@
 
   /*
    * =====================================================
-   * QUANTITY
+   * CUSTOM PRODUCT PANEL
    * =====================================================
    */
 
-  function selectedQuantity() {
-    if (!quantitySelect) {
-      return 1;
-    }
-
-    const value =
-      Number(
-        quantitySelect.value
-      );
-
-    return (
-      Number.isFinite(value) &&
-      value > 0
-    )
-      ? value
-      : 1;
-  }
-
-
-  /*
-   * =====================================================
-   * PRICING STATUS
-   * =====================================================
-   */
-
-  const STATUS = {
-    AVAILABLE:
-      "available",
-
-    PARTIAL:
-      "partial",
-
-    RESEARCH:
-      "research",
-
-    CHECKING:
-      "checking",
-
-    UNKNOWN:
-      "unknown"
-  };
-
-
-  function statusLabel(
-    status
-  ) {
-    switch (status) {
-      case STATUS.AVAILABLE:
-        return "Pricing available";
-
-      case STATUS.PARTIAL:
-        return "Partial pricing";
-
-      case STATUS.RESEARCH:
-        return "Research needed";
-
-      case STATUS.CHECKING:
-        return "Checking pricing…";
-
-      default:
-        return "Pricing not checked";
-    }
-  }
-
-
-  function statusClass(
-    status
-  ) {
-    switch (status) {
-      case STATUS.AVAILABLE:
-        return "pricing-status pricing-available";
-
-      case STATUS.PARTIAL:
-        return "pricing-status pricing-partial";
-
-      case STATUS.RESEARCH:
-        return "pricing-status pricing-research";
-
-      case STATUS.CHECKING:
-        return "pricing-status pricing-checking";
-
-      default:
-        return "pricing-status pricing-unknown";
-    }
-  }
-
-
-  function getProductPricingStatus(
-    productId
-  ) {
-    return (
-      pricingStatus[
-        productId
-      ] || {
-        status:
-          STATUS.UNKNOWN,
-
-        retailerCount:
-          0,
-
-        retailers: [],
-
-        checkedAt:
-          null
-      }
-    );
-  }
-
-
-  function setProductPricingStatus(
-    productId,
-    value
-  ) {
-    pricingStatus[
-      productId
-    ] = {
-      ...getProductPricingStatus(
-        productId
-      ),
-
-      ...value
-    };
-
-    persistPricingStatus();
-  }
-
-
-  function inferPricingStatusFromComparison(
-    data
-  ) {
-    const results =
-      Array.isArray(
-        data?.results
-      )
-        ? data.results
-        : [];
-
-    const retailers =
-      unique(
-        results.map(
-          result =>
-            result.retailer
-        )
-      );
-
+  function openCustomProductPanel() {
     if (
-      retailers.length >= 2
+      !customProductPanel
     ) {
-      return {
-        status:
-          STATUS.AVAILABLE,
-
-        retailerCount:
-          retailers.length,
-
-        retailers
-      };
-    }
-
-    if (
-      retailers.length === 1
-    ) {
-      return {
-        status:
-          STATUS.PARTIAL,
-
-        retailerCount:
-          1,
-
-        retailers
-      };
-    }
-
-    return {
-      status:
-        STATUS.RESEARCH,
-
-      retailerCount:
-        0,
-
-      retailers: []
-    };
-  }
-
-
-  /*
-   * =====================================================
-   * REFRESH / DISCOVERY COVERAGE
-   *
-   * This endpoint reflects repository-backed products.
-   * Custom browser-only products are checked through
-   * /api/compare instead.
-   * =====================================================
-   */
-
-  async function loadEvidenceRefreshStatus() {
-    try {
-      const response =
-        await fetch(
-          "/api/evidence-refresh",
-          {
-            cache:
-              "no-store"
-          }
-        );
-
-      if (!response.ok) {
-        return;
-      }
-
-      const data =
-        await response.json();
-
-      if (!data?.ok) {
-        return;
-      }
-
-      evidenceRefreshData =
-        data;
-
-      applyEvidenceCoverageToCatalog();
-
-    } catch (
-      error
-    ) {
-      console.warn(
-        "Evidence refresh status unavailable:",
-        error
-      );
-    }
-  }
-
-
-  function targetIds(
-    retailerKey
-  ) {
-    const targets =
-      evidenceRefreshData
-        ?.retailers
-        ?.[retailerKey]
-        ?.targets;
-
-    return new Set(
-      (
-        Array.isArray(
-          targets
-        )
-          ? targets
-          : []
-      )
-        .map(
-          target =>
-            target.id
-        )
-        .filter(Boolean)
-    );
-  }
-
-
-  function applyEvidenceCoverageToCatalog() {
-    if (!evidenceRefreshData) {
       return;
     }
 
-    const earthFareNeedsResearch =
-      targetIds(
-        "earthFare"
-      );
-
-    const sproutsNeedsResearch =
-      targetIds(
-        "sprouts"
-      );
-
-
-    for (
-      const product of
-      BASE_PRODUCT_LIST
-    ) {
-      const id =
-        product.id;
-
-      if (!id) {
-        continue;
-      }
-
-      const earthFareCovered =
-        !earthFareNeedsResearch
-          .has(id);
-
-      const sproutsCovered =
-        !sproutsNeedsResearch
-          .has(id);
-
-
-      /*
-       * Do not downgrade a stronger status already
-       * learned from an actual /api/compare response.
-       */
-
-      const existing =
-        getProductPricingStatus(
-          id
-        );
-
-      if (
-        existing.checkedAt &&
-        existing.source ===
-          "compare"
-      ) {
-        continue;
-      }
-
-
-      if (
-        earthFareCovered &&
-        sproutsCovered
-      ) {
-        setProductPricingStatus(
-          id,
-          {
-            status:
-              STATUS.AVAILABLE,
-
-            retailerCount:
-              2,
-
-            retailers: [
-              "Earth Fare",
-              "Sprouts"
-            ],
-
-            source:
-              "evidence-refresh",
-
-            checkedAt:
-              new Date()
-                .toISOString()
-          }
-        );
-
-      } else if (
-        earthFareCovered ||
-        sproutsCovered
-      ) {
-        const retailers =
-          [];
-
-        if (
-          earthFareCovered
-        ) {
-          retailers.push(
-            "Earth Fare"
-          );
-        }
-
-        if (
-          sproutsCovered
-        ) {
-          retailers.push(
-            "Sprouts"
-          );
-        }
-
-        setProductPricingStatus(
-          id,
-          {
-            status:
-              STATUS.PARTIAL,
-
-            retailerCount:
-              retailers.length,
-
-            retailers,
-
-            source:
-              "evidence-refresh",
-
-            checkedAt:
-              new Date()
-                .toISOString()
-          }
-        );
-      }
-    }
-
-    renderWeeklyList();
-  }
-
-
-  /*
-   * =====================================================
-   * CUSTOM PRODUCT
-   * =====================================================
-   */
-
-  function openCustomPanel() {
-    if (!customPanel) {
-      return;
-    }
-
-    customPanel.hidden =
+    customProductPanel.hidden =
       false;
 
-    customPanel.classList
+    customProductPanel
+      .classList
       .remove(
         "hidden"
       );
 
-    if (
-      customNameInput
-    ) {
-      setTimeout(
-        () =>
-          customNameInput
-            .focus(),
-        0
-      );
-    }
+    setTimeout(
+      () => {
+        customProductName
+          ?.focus();
+      },
+      20
+    );
   }
 
 
-  function closeCustomPanel() {
-    if (!customPanel) {
+  function closeCustomProductPanel() {
+    if (
+      !customProductPanel
+    ) {
       return;
     }
 
-    customPanel.hidden =
+    customProductPanel.hidden =
       true;
 
-    customPanel.classList
+    customProductPanel
+      .classList
       .add(
         "hidden"
       );
@@ -1318,16 +904,16 @@
 
   async function saveCustomProduct() {
     const rawName =
-      customNameInput
+      customProductName
         ?.value
         ?.trim();
 
     if (!rawName) {
-      setStatus(
+      showStatus(
         "Enter a product name first."
       );
 
-      customNameInput
+      customProductName
         ?.focus();
 
       return;
@@ -1339,10 +925,12 @@
         rawName
       )}`;
 
-    const duplicate =
-      PRODUCT_LIST.find(
+
+    const existing =
+      products.find(
         product =>
-          product.id === id ||
+          product.id ===
+            id ||
           cleanText(
             product.label
           ) ===
@@ -1351,35 +939,21 @@
           )
       );
 
-    if (duplicate) {
-      if (
-        productSelect
-      ) {
-        productSelect.value =
-          duplicate.id;
 
-        syncUnitsToSelectedProduct();
-      }
+    if (existing) {
+      productSelect.value =
+        existing.id;
 
-      setStatus(
-        `${duplicate.label} is already in your product list.`
+      syncUnitDropdown();
+
+      closeCustomProductPanel();
+
+      showStatus(
+        `${existing.label} is already saved.`
       );
-
-      closeCustomPanel();
 
       return;
     }
-
-
-    const category =
-      customCategorySelect
-        ?.value ||
-      "Custom";
-
-    const defaultUnit =
-      customUnitSelect
-        ?.value ||
-      "each";
 
 
     const product = {
@@ -1395,12 +969,20 @@
           rawName
         ),
 
-      category,
+      category:
+        customProductCategory
+          ?.value ||
+        "Other",
 
-      defaultUnit,
+      defaultUnit:
+        customProductDefaultUnit
+          ?.value ||
+        "each",
 
       allowedUnits: [
-        defaultUnit
+        customProductDefaultUnit
+          ?.value ||
+        "each"
       ],
 
       custom:
@@ -1414,77 +996,169 @@
 
     persistCustomProducts();
 
-    rebuildProductCatalog();
+    rebuildCatalog();
+
+
+    productSelect.value =
+      product.id;
+
+    syncUnitDropdown();
 
 
     if (
-      productSelect
+      customProductName
     ) {
-      productSelect.value =
-        product.id;
-
-      syncUnitsToSelectedProduct();
-    }
-
-
-    if (
-      customNameInput
-    ) {
-      customNameInput.value =
+      customProductName.value =
         "";
     }
 
-    closeCustomPanel();
+
+    closeCustomProductPanel();
 
 
-    /*
-     * Immediately check whether the backend already knows
-     * how to price this product.
-     */
-
-    setProductPricingStatus(
-      product.id,
-      {
-        status:
-          STATUS.CHECKING,
-
-        retailerCount:
-          0,
-
-        retailers: [],
-
-        source:
-          "compare",
-
-        checkedAt:
-          null
-      }
-    );
-
-    renderWeeklyList();
-
-    setStatus(
-      `Saved ${product.label}. Checking pricing coverage…`
+    showStatus(
+      `${product.label} saved. Checking pricing coverage…`
     );
 
 
     await checkProductPricing(
       product,
       1,
-      defaultUnit
+      product.defaultUnit
     );
+  }
 
 
-    const status =
-      getProductPricingStatus(
-        product.id
+  /*
+   * =====================================================
+   * PRICING STATUS
+   * =====================================================
+   */
+
+  function getPricingStatus(
+    productId
+  ) {
+    return (
+      pricingStatus[
+        productId
+      ] ||
+      {
+        status:
+          "unknown",
+
+        retailerCount:
+          0,
+
+        retailers: []
+      }
+    );
+  }
+
+
+  function setPricingStatus(
+    productId,
+    data
+  ) {
+    pricingStatus[
+      productId
+    ] = {
+      ...getPricingStatus(
+        productId
+      ),
+
+      ...data
+    };
+
+    persistPricingStatus();
+  }
+
+
+  function pricingLabel(
+    data
+  ) {
+    switch (
+      data?.status
+    ) {
+      case "available":
+        return "Pricing available";
+
+      case "partial":
+        return "Partial pricing";
+
+      case "research":
+        return "Research needed";
+
+      case "checking":
+        return "Checking pricing…";
+
+      default:
+        return "";
+    }
+  }
+
+
+  function inferPricing(
+    data
+  ) {
+    const retailerNames =
+      unique(
+        (
+          Array.isArray(
+            data?.results
+          )
+            ? data.results
+            : []
+        )
+          .map(
+            result =>
+              result.retailer
+          )
       );
 
-    setStatus(
-      `${product.label} saved. ${statusLabel(
-        status.status
-      )}.`
-    );
+
+    if (
+      retailerNames.length >=
+      2
+    ) {
+      return {
+        status:
+          "available",
+
+        retailerCount:
+          retailerNames.length,
+
+        retailers:
+          retailerNames
+      };
+    }
+
+
+    if (
+      retailerNames.length ===
+      1
+    ) {
+      return {
+        status:
+          "partial",
+
+        retailerCount:
+          1,
+
+        retailers:
+          retailerNames
+      };
+    }
+
+
+    return {
+      status:
+        "research",
+
+      retailerCount:
+        0,
+
+      retailers: []
+    };
   }
 
 
@@ -1494,56 +1168,39 @@
    * =====================================================
    */
 
-  function createWeeklyItem({
-    product,
-    quantity,
-    unit
-  }) {
-    return {
-      id:
-        `${product.id}-${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2, 7)}`,
+  function selectedQuantity() {
+    const quantity =
+      Number(
+        quantitySelect
+          ?.value
+      );
 
-      productId:
-        product.id,
-
-      label:
-        product.label,
-
-      queryName:
-        product.queryName,
-
-      quantity:
-        Number(quantity),
-
-      unit,
-
-      checked:
-        false,
-
-      custom:
-        Boolean(
-          product.custom
-        )
-    };
+    return (
+      Number.isFinite(
+        quantity
+      ) &&
+      quantity > 0
+    )
+      ? quantity
+      : 1;
   }
 
 
-  function addSelectedProduct() {
+  function addSelectedItem() {
     const product =
-      PRODUCTS[
+      productById(
         productSelect
           ?.value
-      ];
+      );
 
     if (!product) {
-      setStatus(
-        "Choose a product first."
+      showStatus(
+        "Select a product first."
       );
 
       return;
     }
+
 
     const quantity =
       selectedQuantity();
@@ -1555,19 +1212,15 @@
       "each";
 
 
-    /*
-     * If the exact same product + unit already exists,
-     * increase its quantity instead of creating a second
-     * row.
-     */
-
     const existing =
       weeklyList.find(
         item =>
           item.productId ===
             product.id &&
-          item.unit === unit &&
-          !item.checked
+          item.unit ===
+            unit &&
+          item.checked !==
+            true
       );
 
 
@@ -1576,16 +1229,34 @@
         Number(
           existing.quantity
         ) +
-        Number(quantity);
+        quantity;
 
     } else {
-      weeklyList.push(
-        createWeeklyItem({
-          product,
-          quantity,
-          unit
-        })
-      );
+      weeklyList.push({
+        id:
+          `${product.id}-${Date.now()}`,
+
+        productId:
+          product.id,
+
+        label:
+          product.label,
+
+        queryName:
+          product.queryName,
+
+        quantity,
+
+        unit,
+
+        checked:
+          false,
+
+        custom:
+          Boolean(
+            product.custom
+          )
+      });
     }
 
 
@@ -1593,61 +1264,36 @@
 
     renderWeeklyList();
 
-    setStatus(
-      `${product.label} added to your weekly list.`
+    showStatus(
+      `${product.label} added to your list.`
     );
 
 
-    /*
-     * Custom products may not have been checked yet.
-     */
-
-    const pricing =
-      getProductPricingStatus(
-        product.id
-      );
-
     if (
-      product.custom &&
-      (
-        pricing.status ===
-          STATUS.UNKNOWN ||
-        pricing.status ===
-          STATUS.RESEARCH
-      )
+      product.custom
     ) {
-      checkProductPricing(
-        product,
-        quantity,
-        unit
-      );
+      const pricing =
+        getPricingStatus(
+          product.id
+        );
+
+      if (
+        pricing.status ===
+          "unknown" ||
+        pricing.status ===
+          "research"
+      ) {
+        checkProductPricing(
+          product,
+          quantity,
+          unit
+        );
+      }
     }
   }
 
 
-  function toggleWeeklyItem(
-    id
-  ) {
-    const item =
-      weeklyList.find(
-        row =>
-          row.id === id
-      );
-
-    if (!item) {
-      return;
-    }
-
-    item.checked =
-      !item.checked;
-
-    persistWeeklyList();
-
-    renderWeeklyList();
-  }
-
-
-  function removeWeeklyItem(
+  function removeItem(
     id
   ) {
     weeklyList =
@@ -1662,12 +1308,39 @@
   }
 
 
+  function toggleItem(
+    id,
+    checked
+  ) {
+    const item =
+      weeklyList.find(
+        row =>
+          row.id === id
+      );
+
+    if (!item) {
+      return;
+    }
+
+    item.checked =
+      Boolean(
+        checked
+      );
+
+    persistWeeklyList();
+
+    renderWeeklyList();
+  }
+
+
   function resetWeeklyList() {
     weeklyList =
       weeklyList.map(
         item => ({
           ...item,
-          checked: false
+
+          checked:
+            false
         })
       );
 
@@ -1675,159 +1348,251 @@
 
     renderWeeklyList();
 
-    setStatus(
-      "Weekly list reset. All items are unchecked."
-    );
-  }
-
-
-  function activeWeeklyItems() {
-    return weeklyList.filter(
-      item =>
-        !item.checked
+    showStatus(
+      "Weekly list reset."
     );
   }
 
 
   /*
    * =====================================================
-   * WEEKLY LIST RENDER
+   * LIST RENDERING
    * =====================================================
    */
 
   function renderWeeklyList() {
-    if (!listContainer) {
+    if (!groceryList) {
       return;
     }
+
+
+    groceryList.innerHTML =
+      "";
 
 
     if (
       !weeklyList.length
     ) {
-      listContainer.innerHTML =
+      groceryList.innerHTML =
         `
           <div class="empty-state">
-            <p>Your weekly grocery list is empty.</p>
-            <small>Add the products you buy regularly.</small>
+            Your weekly grocery list is empty.
           </div>
         `;
+
+      updateRemainingCount();
 
       return;
     }
 
 
-    listContainer.innerHTML =
+    for (
+      const item of
       weeklyList
-        .map(
-          item => {
-            const product =
-              itemProduct(
-                item
-              );
+    ) {
+      const product =
+        productById(
+          item.productId
+        ) || {
+          label:
+            item.label ||
+            item.productId
+        };
 
-            const pricing =
-              getProductPricingStatus(
-                item.productId
-              );
-
-            const checkedClass =
-              item.checked
-                ? "is-checked"
-                : "";
-
-            const retailers =
-              pricing.retailers
-                ?.length
-                ? pricing
-                    .retailers
-                    .join(", ")
-                : "";
-
-            const retailerDetail =
-              retailers
-                ? `<span class="pricing-retailers">${escapeHtml(
-                    retailers
-                  )}</span>`
-                : "";
+      const pricing =
+        getPricingStatus(
+          item.productId
+        );
 
 
-            return `
-              <div
-                class="weekly-item ${checkedClass}"
-                data-weekly-item="${escapeHtml(
-                  item.id
-                )}"
-              >
-                <label class="weekly-check">
-                  <input
-                    type="checkbox"
-                    data-toggle-item="${escapeHtml(
-                      item.id
-                    )}"
-                    ${
-                      item.checked
-                        ? "checked"
-                        : ""
-                    }
-                  />
+      /*
+       * Use the existing HTML template so we preserve
+       * the visual styling already built into the app.
+       */
 
-                  <span class="weekly-item-main">
-                    <span class="weekly-item-name">
-                      ${escapeHtml(
-                        product.label
-                      )}
-                    </span>
+      if (
+        groceryItemTemplate
+      ) {
+        const fragment =
+          groceryItemTemplate
+            .content
+            .cloneNode(
+              true
+            );
 
-                    <span class="weekly-item-quantity">
-                      ${escapeHtml(
-                        item.quantity
-                      )}
-                      ${escapeHtml(
-                        unitLabel(
-                          item.unit
-                        )
-                      )}
-                    </span>
+        const article =
+          fragment.querySelector(
+            ".grocery-item"
+          );
 
-                    <span class="${statusClass(
-                      pricing.status
-                    )}">
-                      ${escapeHtml(
-                        statusLabel(
-                          pricing.status
-                        )
-                      )}
-                    </span>
+        const checkbox =
+          fragment.querySelector(
+            ".grocery-check"
+          );
 
-                    ${retailerDetail}
-                  </span>
-                </label>
+        const productName =
+          fragment.querySelector(
+            ".grocery-item-product"
+          );
 
-                <button
-                  type="button"
-                  class="remove-item"
-                  data-remove-item="${escapeHtml(
-                    item.id
-                  )}"
-                  aria-label="Remove ${escapeHtml(
-                    product.label
-                  )}"
-                >
-                  ×
-                </button>
-              </div>
-            `;
+        const meta =
+          fragment.querySelector(
+            ".grocery-item-meta"
+          );
+
+        const removeButton =
+          fragment.querySelector(
+            ".grocery-remove"
+          );
+
+
+        productName.textContent =
+          product.label;
+
+
+        const pricingText =
+          pricingLabel(
+            pricing
+          );
+
+        const retailerText =
+          pricing.retailers
+            ?.length
+            ? pricing.retailers
+                .join(", ")
+            : "";
+
+
+        meta.textContent =
+          [
+            `${item.quantity} ${unitLabel(
+              item.unit
+            )}`,
+
+            pricingText,
+
+            retailerText
+          ]
+            .filter(Boolean)
+            .join(" · ");
+
+
+        checkbox.checked =
+          Boolean(
+            item.checked
+          );
+
+
+        if (
+          item.checked
+        ) {
+          article.classList
+            .add(
+              "is-complete"
+            );
+        }
+
+
+        checkbox.addEventListener(
+          "change",
+          () => {
+            toggleItem(
+              item.id,
+              checkbox.checked
+            );
           }
-        )
-        .join("");
+        );
+
+
+        removeButton.addEventListener(
+          "click",
+          () => {
+            removeItem(
+              item.id
+            );
+          }
+        );
+
+
+        groceryList.appendChild(
+          fragment
+        );
+
+      } else {
+        const row =
+          document.createElement(
+            "div"
+          );
+
+        row.textContent =
+          `${product.label} — ${item.quantity} ${item.unit}`;
+
+        groceryList.appendChild(
+          row
+        );
+      }
+    }
+
+
+    updateRemainingCount();
+  }
+
+
+  function updateRemainingCount() {
+    if (
+      !remainingItemCount
+    ) {
+      return;
+    }
+
+    const remaining =
+      weeklyList.filter(
+        item =>
+          !item.checked
+      ).length;
+
+    remainingItemCount.textContent =
+      `${remaining} item${
+        remaining === 1
+          ? ""
+          : "s"
+      } to compare`;
   }
 
 
   /*
    * =====================================================
-   * QUERY BUILDING
+   * COMPARE API
    * =====================================================
    */
+
+  function itemProduct(
+    item
+  ) {
+    return (
+      productById(
+        item.productId
+      ) ||
+      {
+        id:
+          item.productId,
+
+        label:
+          item.label,
+
+        queryName:
+          item.queryName ||
+          item.label,
+
+        defaultUnit:
+          item.unit,
+
+        custom:
+          item.custom
+      }
+    );
+  }
+
 
   function buildCompareQuery(
     item
@@ -1837,25 +1602,9 @@
         item
       );
 
-    const quantity =
-      Number(
-        item.quantity
-      ) || 1;
-
-    const unit =
-      item.unit ||
-      product.defaultUnit ||
-      "each";
-
-    return `${quantity} ${unit} ${product.queryName}`;
+    return `${item.quantity} ${item.unit} ${product.queryName}`;
   }
 
-
-  /*
-   * =====================================================
-   * API COMPARE
-   * =====================================================
-   */
 
   async function compareItem(
     item
@@ -1876,18 +1625,19 @@
         }
       );
 
+
     if (!response.ok) {
       throw new Error(
         `Compare API returned ${response.status}`
       );
     }
 
+
     const data =
       await response.json();
 
     return {
       item,
-      query,
       data
     };
   }
@@ -1895,46 +1645,14 @@
 
   async function checkProductPricing(
     product,
-    quantity = 1,
-    unit = null
+    quantity,
+    unit
   ) {
-    const selectedUnit =
-      unit ||
-      product.defaultUnit ||
-      "each";
-
-    const item = {
-      productId:
-        product.id,
-
-      label:
-        product.label,
-
-      queryName:
-        product.queryName,
-
-      quantity,
-      unit:
-        selectedUnit,
-
-      checked:
-        false,
-
-      custom:
-        Boolean(
-          product.custom
-        )
-    };
-
-
-    setProductPricingStatus(
+    setPricingStatus(
       product.id,
       {
         status:
-          STATUS.CHECKING,
-
-        source:
-          "compare"
+          "checking"
       }
     );
 
@@ -1942,23 +1660,36 @@
 
 
     try {
-      const result =
-        await compareItem(
-          item
-        );
+      const response =
+        await compareItem({
+          productId:
+            product.id,
+
+          label:
+            product.label,
+
+          queryName:
+            product.queryName,
+
+          quantity,
+
+          unit,
+
+          custom:
+            product.custom
+        });
+
 
       const inferred =
-        inferPricingStatusFromComparison(
-          result.data
+        inferPricing(
+          response.data
         );
 
-      setProductPricingStatus(
+
+      setPricingStatus(
         product.id,
         {
           ...inferred,
-
-          source:
-            "compare",
 
           checkedAt:
             new Date()
@@ -1966,30 +1697,38 @@
         }
       );
 
+
       renderWeeklyList();
 
-      return result.data;
+
+      showStatus(
+        `${product.label}: ${
+          inferred.status ===
+          "available"
+            ? "pricing available"
+            : inferred.status ===
+              "partial"
+            ? "partial pricing available"
+            : "pricing research needed"
+        }.`
+      );
+
+
+      return response.data;
 
     } catch (
       error
     ) {
-      setProductPricingStatus(
+      setPricingStatus(
         product.id,
         {
           status:
-            STATUS.RESEARCH,
+            "research",
 
           retailerCount:
             0,
 
           retailers: [],
-
-          source:
-            "compare",
-
-          checkedAt:
-            new Date()
-              .toISOString(),
 
           error:
             error.message
@@ -2005,44 +1744,39 @@
 
   /*
    * =====================================================
-   * NORMALIZE COMPARISON RESULTS
+   * OPTIMIZATION DATA
    * =====================================================
    */
 
-  function normalizeItemComparison(
+  function normalizeComparison(
     response
   ) {
     const item =
       response.item;
-
-    const data =
-      response.data;
 
     const product =
       itemProduct(
         item
       );
 
-    const results =
+    const resultList =
       Array.isArray(
-        data?.results
+        response.data?.results
       )
-        ? data.results
+        ? response.data.results
         : [];
 
 
     const inferred =
-      inferPricingStatusFromComparison(
-        data
+      inferPricing(
+        response.data
       );
 
-    setProductPricingStatus(
+
+    setPricingStatus(
       item.productId,
       {
         ...inferred,
-
-        source:
-          "compare",
 
         checkedAt:
           new Date()
@@ -2052,28 +1786,14 @@
 
 
     return {
-      itemId:
-        item.id,
+      item,
 
-      productId:
-        item.productId,
-
-      label:
-        product.label,
-
-      quantity:
-        item.quantity,
-
-      unit:
-        item.unit,
+      product,
 
       results:
-        results.map(
+        resultList.map(
           result => ({
             ...result,
-
-            retailer:
-              result.retailer,
 
             cost:
               Number(
@@ -2091,10 +1811,11 @@
    * =====================================================
    */
 
-  function buildLowestCostPlan(
+  function lowestCostPlan(
     comparisons
   ) {
-    const assignments = [];
+    const assignments =
+      [];
 
     let total = 0;
 
@@ -2103,7 +1824,7 @@
       const comparison of
       comparisons
     ) {
-      const offers =
+      const valid =
         comparison.results
           .filter(
             result =>
@@ -2118,211 +1839,37 @@
           );
 
 
-      if (!offers.length) {
-        assignments.push({
-          comparison,
-          result: null
-        });
+      const selected =
+        valid[0] ||
+        null;
 
-        continue;
+
+      if (selected) {
+        total +=
+          selected.cost;
       }
 
-
-      const winner =
-        offers[0];
-
-      total +=
-        winner.cost;
 
       assignments.push({
         comparison,
         result:
-          winner
+          selected
       });
     }
 
 
     return {
-      key:
-        "lowest",
-
       name:
         "Lowest Cost",
 
       description:
-        "Cheapest available retailer for every item.",
+        "Cheapest valid retailer for each grocery item.",
 
       assignments,
 
-      actualTotal:
+      total:
         round(
           total
-        ),
-
-      score:
-        round(
-          total
-        ),
-
-      stores:
-        unique(
-          assignments
-            .map(
-              assignment =>
-                assignment.result
-                  ?.retailer
-            )
-        )
-    };
-  }
-
-
-  /*
-   * =====================================================
-   * RETAILER SUBSETS
-   * =====================================================
-   */
-
-  function allRetailers(
-    comparisons
-  ) {
-    return unique(
-      comparisons
-        .flatMap(
-          comparison =>
-            comparison.results
-              .map(
-                result =>
-                  result.retailer
-              )
-        )
-    );
-  }
-
-
-  function retailerSubsets(
-    retailers
-  ) {
-    const subsets = [];
-
-    const total =
-      2 **
-      retailers.length;
-
-
-    for (
-      let mask = 1;
-      mask < total;
-      mask++
-    ) {
-      const subset = [];
-
-      for (
-        let index = 0;
-        index <
-        retailers.length;
-        index++
-      ) {
-        if (
-          mask &
-          (
-            1 <<
-            index
-          )
-        ) {
-          subset.push(
-            retailers[
-              index
-            ]
-          );
-        }
-      }
-
-      subsets.push(
-        subset
-      );
-    }
-
-    return subsets;
-  }
-
-
-  /*
-   * =====================================================
-   * PLAN FOR RETAILER SET
-   * =====================================================
-   */
-
-  function buildPlanForRetailers(
-    comparisons,
-    retailers
-  ) {
-    const allowed =
-      new Set(
-        retailers
-      );
-
-    const assignments = [];
-
-    let total = 0;
-
-
-    for (
-      const comparison of
-      comparisons
-    ) {
-      const candidates =
-        comparison.results
-          .filter(
-            result =>
-              allowed.has(
-                result.retailer
-              ) &&
-              Number.isFinite(
-                result.cost
-              )
-          )
-          .sort(
-            (a, b) =>
-              a.cost -
-              b.cost
-          );
-
-
-      if (!candidates.length) {
-        return null;
-      }
-
-
-      const winner =
-        candidates[0];
-
-      total +=
-        winner.cost;
-
-      assignments.push({
-        comparison,
-        result:
-          winner
-      });
-    }
-
-
-    return {
-      assignments,
-
-      actualTotal:
-        round(
-          total
-        ),
-
-      stores:
-        unique(
-          assignments.map(
-            assignment =>
-              assignment.result
-                .retailer
-          )
         )
     };
   }
@@ -2334,11 +1881,151 @@
    * =====================================================
    */
 
-  function buildBestBalancePlan(
+  function retailerNames(
+    comparisons
+  ) {
+    return unique(
+      comparisons.flatMap(
+        comparison =>
+          comparison.results
+            .map(
+              result =>
+                result.retailer
+            )
+      )
+    );
+  }
+
+
+  function subsets(
+    array
+  ) {
+    const output = [];
+
+    const max =
+      2 **
+      array.length;
+
+
+    for (
+      let mask = 1;
+      mask < max;
+      mask++
+    ) {
+      const subset = [];
+
+      for (
+        let i = 0;
+        i <
+        array.length;
+        i++
+      ) {
+        if (
+          mask &
+          (
+            1 <<
+            i
+          )
+        ) {
+          subset.push(
+            array[i]
+          );
+        }
+      }
+
+      output.push(
+        subset
+      );
+    }
+
+    return output;
+  }
+
+
+  function planForStores(
+    comparisons,
+    stores
+  ) {
+    const allowed =
+      new Set(
+        stores
+      );
+
+    const assignments =
+      [];
+
+    let total = 0;
+
+
+    for (
+      const comparison of
+      comparisons
+    ) {
+      const options =
+        comparison.results
+          .filter(
+            result =>
+              allowed.has(
+                result.retailer
+              )
+          )
+          .sort(
+            (a, b) =>
+              a.cost -
+              b.cost
+          );
+
+
+      if (!options.length) {
+        return null;
+      }
+
+
+      const winner =
+        options[0];
+
+      total +=
+        winner.cost;
+
+
+      assignments.push({
+        comparison,
+
+        result:
+          winner
+      });
+    }
+
+
+    const usedStores =
+      unique(
+        assignments.map(
+          assignment =>
+            assignment.result
+              .retailer
+        )
+      );
+
+
+    return {
+      assignments,
+
+      total:
+        round(
+          total
+        ),
+
+      stores:
+        usedStores
+    };
+  }
+
+
+  function bestBalancePlan(
     comparisons
   ) {
     const retailers =
-      allRetailers(
+      retailerNames(
         comparisons
       );
 
@@ -2346,71 +2033,60 @@
 
 
     for (
-      const subset of
-      retailerSubsets(
+      const storeSet of
+      subsets(
         retailers
       )
     ) {
       const plan =
-        buildPlanForRetailers(
+        planForStores(
           comparisons,
-          subset
+          storeSet
         );
 
       if (!plan) {
         continue;
       }
 
-      const extraStops =
+
+      const penalty =
         Math.max(
           0,
           plan.stores.length -
           1
-        );
+        ) *
+        STOP_PENALTY;
+
 
       const score =
-        plan.actualTotal +
-        STOP_PENALTY *
-          extraStops;
+        plan.total +
+        penalty;
 
 
       const candidate = {
-        key:
-          "balance",
-
         name:
           "Best Balance",
 
         description:
-          "Balances grocery savings against extra store stops.",
+          "Balances grocery savings with fewer store stops.",
 
-        ...plan,
+        assignments:
+          plan.assignments,
 
-        score:
-          round(
-            score
-          )
+        total:
+          plan.total,
+
+        stores:
+          plan.stores,
+
+        score
       };
 
 
       if (
         !best ||
         candidate.score <
-          best.score ||
-        (
-          candidate.score ===
-            best.score &&
-          candidate.actualTotal <
-            best.actualTotal
-        ) ||
-        (
-          candidate.score ===
-            best.score &&
-          candidate.actualTotal ===
-            best.actualTotal &&
-          candidate.stores.length <
-            best.stores.length
-        )
+          best.score
       ) {
         best =
           candidate;
@@ -2428,11 +2104,11 @@
    * =====================================================
    */
 
-  function buildOneStorePlan(
+  function oneStorePlan(
     comparisons
   ) {
     const retailers =
-      allRetailers(
+      retailerNames(
         comparisons
       );
 
@@ -2443,25 +2119,24 @@
       const retailer of
       retailers
     ) {
-      const assignments = [];
+      let total = 0;
 
       let coverage = 0;
-      let total = 0;
+
+      const assignments =
+        [];
 
 
       for (
         const comparison of
         comparisons
       ) {
-        const candidate =
+        const result =
           comparison.results
             .filter(
-              result =>
-                result.retailer ===
-                  retailer &&
-                Number.isFinite(
-                  result.cost
-                )
+              candidate =>
+                candidate.retailer ===
+                retailer
             )
             .sort(
               (a, b) =>
@@ -2471,51 +2146,39 @@
           null;
 
 
-        if (candidate) {
-          coverage += 1;
+        if (result) {
           total +=
-            candidate.cost;
+            result.cost;
+
+          coverage += 1;
         }
 
 
         assignments.push({
           comparison,
-          result:
-            candidate
+
+          result
         });
       }
 
 
       const candidate = {
-        key:
-          "one-store",
-
         name:
           "One Store",
 
         description:
-          coverage ===
-          comparisons.length
-            ? `Everything available at ${retailer}.`
-            : `${retailer} covers ${coverage} of ${comparisons.length} items.`,
+          `${retailer} covers ${coverage} of ${comparisons.length} items.`,
 
-        assignments,
+        retailer,
 
         coverage,
 
-        actualTotal:
+        assignments,
+
+        total:
           round(
             total
-          ),
-
-        score:
-          round(
-            total
-          ),
-
-        stores: [
-          retailer
-        ]
+          )
       };
 
 
@@ -2526,8 +2189,8 @@
         (
           candidate.coverage ===
             best.coverage &&
-          candidate.actualTotal <
-            best.actualTotal
+          candidate.total <
+            best.total
         )
       ) {
         best =
@@ -2542,531 +2205,320 @@
 
   /*
    * =====================================================
-   * RESULTS GROUPING
+   * PLAN RENDERING
    * =====================================================
    */
 
-  function groupAssignmentsByStore(
-    assignments
+  function renderOptimizationCard(
+    plan
   ) {
-    const groups =
-      new Map();
+    if (!plan) {
+      return null;
+    }
 
-    const unavailable = [];
+
+    if (
+      optimizationCardTemplate
+    ) {
+      const fragment =
+        optimizationCardTemplate
+          .content
+          .cloneNode(
+            true
+          );
+
+      const label =
+        fragment.querySelector(
+          ".optimization-label"
+        );
+
+      const title =
+        fragment.querySelector(
+          ".optimization-title"
+        );
+
+      const total =
+        fragment.querySelector(
+          ".optimization-total"
+        );
+
+      const meta =
+        fragment.querySelector(
+          ".optimization-meta"
+        );
+
+      const stores =
+        fragment.querySelector(
+          ".optimization-stores"
+        );
+
+
+      label.textContent =
+        plan.name;
+
+      title.textContent =
+        plan.description;
+
+      total.textContent =
+        money(
+          plan.total
+        );
+
+
+      const usedStores =
+        unique(
+          plan.assignments
+            .map(
+              assignment =>
+                assignment.result
+                  ?.retailer
+            )
+        );
+
+
+      meta.textContent =
+        usedStores.length
+          ? `${usedStores.length} store${
+              usedStores.length ===
+              1
+                ? ""
+                : "s"
+            }`
+          : "No pricing available";
+
+
+      stores.innerHTML =
+        "";
+
+
+      for (
+        const retailer of
+        usedStores
+      ) {
+        const heading =
+          document.createElement(
+            "h4"
+          );
+
+        heading.textContent =
+          retailer;
+
+        stores.appendChild(
+          heading
+        );
+
+
+        const assignments =
+          plan.assignments.filter(
+            assignment =>
+              assignment.result
+                ?.retailer ===
+              retailer
+          );
+
+
+        for (
+          const assignment of
+          assignments
+        ) {
+          const row =
+            document.createElement(
+              "div"
+            );
+
+          row.className =
+            "optimization-store-item";
+
+          const result =
+            assignment.result;
+
+          row.textContent =
+            `${assignment.comparison.product.label} · ${money(
+              result.cost
+            )}`;
+
+          stores.appendChild(
+            row
+          );
+        }
+      }
+
+
+      const missing =
+        plan.assignments.filter(
+          assignment =>
+            !assignment.result
+        );
+
+
+      if (
+        missing.length
+      ) {
+        const heading =
+          document.createElement(
+            "h4"
+          );
+
+        heading.textContent =
+          "Pricing research needed";
+
+        stores.appendChild(
+          heading
+        );
+
+
+        for (
+          const assignment of
+          missing
+        ) {
+          const row =
+            document.createElement(
+              "div"
+            );
+
+          row.className =
+            "optimization-store-item";
+
+          row.textContent =
+            assignment
+              .comparison
+              .product
+              .label;
+
+          stores.appendChild(
+            row
+          );
+        }
+      }
+
+
+      return fragment;
+    }
+
+
+    const fallback =
+      document.createElement(
+        "div"
+      );
+
+    fallback.textContent =
+      `${plan.name}: ${money(
+        plan.total
+      )}`;
+
+    return fallback;
+  }
+
+
+  function renderPlans(
+    plans
+  ) {
+    if (
+      !results ||
+      !resultsSection
+    ) {
+      return;
+    }
+
+
+    results.innerHTML =
+      "";
 
 
     for (
-      const assignment of
-      assignments
+      const plan of
+      plans
     ) {
-      if (
-        !assignment.result
-      ) {
-        unavailable.push(
-          assignment.comparison
-        );
-
+      if (!plan) {
         continue;
       }
 
+      const card =
+        renderOptimizationCard(
+          plan
+        );
 
-      const retailer =
-        assignment.result
-          .retailer;
-
-
-      if (
-        !groups.has(
-          retailer
-        )
-      ) {
-        groups.set(
-          retailer,
-          []
+      if (card) {
+        results.appendChild(
+          card
         );
       }
-
-
-      groups
-        .get(retailer)
-        .push(
-          assignment
-        );
     }
 
 
-    return {
-      groups,
-      unavailable
-    };
+    resultsSection.hidden =
+      false;
   }
 
 
   /*
    * =====================================================
-   * FRESHNESS DISPLAY
-   * =====================================================
-   */
-
-  function freshnessText(
-    result
-  ) {
-    if (
-      result.dataMode ===
-        "live" ||
-      result.retrievalSource ===
-        "kroger-live-api"
-    ) {
-      return "Live price";
-    }
-
-
-    if (
-      result.freshness ===
-      "current"
-    ) {
-      if (
-        Number(
-          result.ageDays
-        ) === 0
-      ) {
-        return "Updated today";
-      }
-
-      return `Updated ${result.ageDays} day${
-        Number(
-          result.ageDays
-        ) === 1
-          ? ""
-          : "s"
-      } ago`;
-    }
-
-
-    if (
-      result.freshness ===
-      "aging"
-    ) {
-      return `Aging evidence${
-        result.ageDays !==
-        null
-          ? ` · ${result.ageDays} days old`
-          : ""
-      }`;
-    }
-
-
-    if (
-      result.freshness ===
-      "stale"
-    ) {
-      return `Needs refresh${
-        result.ageDays !==
-        null
-          ? ` · ${result.ageDays} days old`
-          : ""
-      }`;
-    }
-
-
-    if (
-      result.dataMode ===
-      "dated-retailer-evidence"
-    ) {
-      return "Public price evidence";
-    }
-
-
-    return "";
-  }
-
-
-  /*
-   * =====================================================
-   * PACKAGE DESCRIPTION
-   * =====================================================
-   */
-
-  function packageDescription(
-    result
-  ) {
-    const packages =
-      Array.isArray(
-        result.packages
-      )
-        ? result.packages
-        : [];
-
-    if (!packages.length) {
-      return "";
-    }
-
-
-    const first =
-      packages[0];
-
-    const count =
-      packages.length;
-
-    const size =
-      first.size ||
-      (
-        first.packageQty &&
-        first.packageUnit
-          ? `${first.packageQty} ${first.packageUnit}`
-          : ""
-      );
-
-
-    if (
-      count === 1
-    ) {
-      return [
-        first.product,
-        size
-      ]
-        .filter(Boolean)
-        .join(" · ");
-    }
-
-
-    return [
-      `${count} × ${first.product}`,
-      size
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  }
-
-
-  /*
-   * =====================================================
-   * PLAN RENDER
-   * =====================================================
-   */
-
-  function renderPlan(
-    plan,
-    emphasized = false
-  ) {
-    if (!plan) {
-      return "";
-    }
-
-
-    const {
-      groups,
-      unavailable
-    } =
-      groupAssignmentsByStore(
-        plan.assignments
-      );
-
-
-    const storesHtml =
-      [...groups.entries()]
-        .map(
-          ([
-            retailer,
-            assignments
-          ]) => {
-            const storeTotal =
-              assignments.reduce(
-                (
-                  sum,
-                  assignment
-                ) =>
-                  sum +
-                  Number(
-                    assignment.result
-                      .cost
-                  ),
-                0
-              );
-
-
-            const itemsHtml =
-              assignments
-                .map(
-                  assignment => {
-                    const comparison =
-                      assignment.comparison;
-
-                    const result =
-                      assignment.result;
-
-                    const freshness =
-                      freshnessText(
-                        result
-                      );
-
-                    const packageText =
-                      packageDescription(
-                        result
-                      );
-
-
-                    return `
-                      <div class="result-item">
-                        <div class="result-item-main">
-                          <strong>
-                            ${escapeHtml(
-                              comparison.label
-                            )}
-                          </strong>
-
-                          <span>
-                            ${escapeHtml(
-                              comparison.quantity
-                            )}
-                            ${escapeHtml(
-                              unitLabel(
-                                comparison.unit
-                              )
-                            )}
-                          </span>
-
-                          ${
-                            packageText
-                              ? `
-                                <small>
-                                  ${escapeHtml(
-                                    packageText
-                                  )}
-                                </small>
-                              `
-                              : ""
-                          }
-
-                          ${
-                            freshness
-                              ? `
-                                <small class="freshness">
-                                  ${escapeHtml(
-                                    freshness
-                                  )}
-                                </small>
-                              `
-                              : ""
-                          }
-                        </div>
-
-                        <strong class="result-price">
-                          ${money(
-                            result.cost
-                          )}
-                        </strong>
-                      </div>
-                    `;
-                  }
-                )
-                .join("");
-
-
-            return `
-              <section class="store-group">
-                <header class="store-header">
-                  <h4>
-                    ${escapeHtml(
-                      retailer
-                    )}
-                  </h4>
-
-                  <strong>
-                    ${money(
-                      storeTotal
-                    )}
-                  </strong>
-                </header>
-
-                ${itemsHtml}
-              </section>
-            `;
-          }
-        )
-        .join("");
-
-
-    const unavailableHtml =
-      unavailable.length
-        ? `
-          <div class="unavailable-items">
-            <strong>
-              Pricing research needed
-            </strong>
-
-            ${unavailable
-              .map(
-                comparison =>
-                  `
-                    <div>
-                      ${escapeHtml(
-                        comparison.label
-                      )}
-                    </div>
-                  `
-              )
-              .join("")}
-          </div>
-        `
-        : "";
-
-
-    const coverage =
-      plan.coverage !==
-      undefined
-        ? `
-          <span class="plan-coverage">
-            ${plan.coverage} of ${
-              plan.assignments.length
-            } items covered
-          </span>
-        `
-        : "";
-
-
-    return `
-      <article class="plan-card ${
-        emphasized
-          ? "plan-featured"
-          : ""
-      }">
-        <header class="plan-card-header">
-          <div>
-            <h3>
-              ${escapeHtml(
-                plan.name
-              )}
-            </h3>
-
-            <p>
-              ${escapeHtml(
-                plan.description
-              )}
-            </p>
-
-            ${coverage}
-          </div>
-
-          <div class="plan-total">
-            ${money(
-              plan.actualTotal
-            )}
-          </div>
-        </header>
-
-        ${
-          plan.stores
-            ?.length
-            ? `
-              <div class="plan-stops">
-                ${
-                  plan.stores
-                    .length
-                }
-                store${
-                  plan.stores
-                    .length === 1
-                    ? ""
-                    : "s"
-                }
-                ·
-                ${escapeHtml(
-                  plan.stores
-                    .join(
-                      " + "
-                    )
-                )}
-              </div>
-            `
-            : ""
-        }
-
-        ${storesHtml}
-
-        ${unavailableHtml}
-      </article>
-    `;
-  }
-
-
-  /*
-   * =====================================================
-   * COMPARE ALL
+   * COMPARE WEEKLY LIST
    * =====================================================
    */
 
   async function compareWeeklyList() {
-    if (
-      compareInProgress
-    ) {
+    if (comparing) {
       return;
     }
 
 
-    const active =
-      activeWeeklyItems();
+    const activeItems =
+      weeklyList.filter(
+        item =>
+          !item.checked
+      );
 
 
-    if (!active.length) {
-      setStatus(
+    if (
+      !activeItems.length
+    ) {
+      showStatus(
         weeklyList.length
-          ? "Everything on your weekly list is already checked off."
-          : "Add grocery items before comparing."
+          ? "Everything on your list is already checked off."
+          : "Add groceries before comparing."
       );
 
       return;
     }
 
 
-    compareInProgress =
+    comparing =
       true;
 
-    if (
-      compareButton
-    ) {
-      compareButton.disabled =
-        true;
-    }
+    compareButton.disabled =
+      true;
 
-    setStatus(
-      `Comparing ${active.length} item${
-        active.length === 1
+
+    showStatus(
+      `Comparing ${activeItems.length} item${
+        activeItems.length ===
+        1
           ? ""
           : "s"
       }…`
     );
 
 
-    if (
-      resultsContainer
-    ) {
-      resultsContainer.innerHTML =
-        `
-          <div class="results-loading">
-            Finding the best grocery plan…
-          </div>
-        `;
-    }
-
-
     try {
-      const raw =
+      const rawResponses =
         await Promise.all(
-          active.map(
+          activeItems.map(
             item =>
-              compareItem(item)
+              compareItem(
+                item
+              )
                 .catch(
                   error => ({
                     item,
-                    query:
-                      buildCompareQuery(
-                        item
-                      ),
 
                     data: {
-                      ok: false,
-                      results: [],
+                      ok:
+                        false,
+
+                      results:
+                        [],
+
                       error:
                         error.message
                     }
@@ -3077,8 +2529,8 @@
 
 
       const comparisons =
-        raw.map(
-          normalizeItemComparison
+        rawResponses.map(
+          normalizeComparison
         );
 
 
@@ -3086,65 +2538,29 @@
 
 
       const lowest =
-        buildLowestCostPlan(
+        lowestCostPlan(
           comparisons
         );
 
-      const balance =
-        buildBestBalancePlan(
+      const balanced =
+        bestBalancePlan(
           comparisons
         );
 
       const oneStore =
-        buildOneStorePlan(
+        oneStorePlan(
           comparisons
         );
 
 
-      if (
-        resultsContainer
-      ) {
-        resultsContainer.innerHTML =
-          `
-            <div class="results-heading">
-              <div>
-                <h2>
-                  Your Grocery Plan
-                </h2>
-
-                <p>
-                  Based on ${
-                    active.length
-                  } unchecked item${
-                    active.length === 1
-                      ? ""
-                      : "s"
-                  }.
-                </p>
-              </div>
-            </div>
-
-            <div class="plan-grid">
-              ${renderPlan(
-                lowest,
-                false
-              )}
-
-              ${renderPlan(
-                balance,
-                true
-              )}
-
-              ${renderPlan(
-                oneStore,
-                false
-              )}
-            </div>
-          `;
-      }
+      renderPlans([
+        lowest,
+        balanced,
+        oneStore
+      ]);
 
 
-      const researchCount =
+      const missingCount =
         comparisons.filter(
           comparison =>
             !comparison.results
@@ -3153,18 +2569,18 @@
 
 
       if (
-        researchCount > 0
+        missingCount
       ) {
-        setStatus(
-          `Comparison complete. ${researchCount} item${
-            researchCount === 1
+        showStatus(
+          `Comparison complete. ${missingCount} item${
+            missingCount === 1
               ? ""
               : "s"
           } still need pricing research.`
         );
 
       } else {
-        setStatus(
+        showStatus(
           "Comparison complete."
         );
       }
@@ -3176,56 +2592,17 @@
         error
       );
 
-      setStatus(
+      showStatus(
         `Comparison failed: ${error.message}`
       );
 
-      if (
-        resultsContainer
-      ) {
-        resultsContainer.innerHTML =
-          `
-            <div class="error-state">
-              We couldn't complete the grocery comparison.
-            </div>
-          `;
-      }
-
     } finally {
-      compareInProgress =
+      comparing =
         false;
 
-      if (
-        compareButton
-      ) {
-        compareButton.disabled =
-          false;
-      }
+      compareButton.disabled =
+        false;
     }
-  }
-
-
-  /*
-   * =====================================================
-   * STATUS MESSAGE
-   * =====================================================
-   */
-
-  function setStatus(
-    message
-  ) {
-    if (
-      statusContainer
-    ) {
-      statusContainer.textContent =
-        message;
-
-      return;
-    }
-
-    console.log(
-      message
-    );
   }
 
 
@@ -3238,14 +2615,21 @@
   productSelect
     ?.addEventListener(
       "change",
-      syncUnitsToSelectedProduct
+      syncUnitDropdown
     );
 
 
-  addButton
+  addItemButton
     ?.addEventListener(
       "click",
-      addSelectedProduct
+      addSelectedItem
+    );
+
+
+  resetListButton
+    ?.addEventListener(
+      "click",
+      resetWeeklyList
     );
 
 
@@ -3256,43 +2640,32 @@
     );
 
 
-  resetButton
+  /*
+   * THIS IS THE BUTTON THAT WAS BROKEN.
+   */
+
+  openCustomProductButton
     ?.addEventListener(
       "click",
-      resetWeeklyList
+      openCustomProductPanel
     );
 
 
-  customToggleButton
+  closeCustomProductButton
     ?.addEventListener(
       "click",
-      () => {
-        if (
-          customPanel &&
-          !customPanel.hidden &&
-          !customPanel
-            .classList
-            .contains(
-              "hidden"
-            )
-        ) {
-          closeCustomPanel();
-
-        } else {
-          openCustomPanel();
-        }
-      }
+      closeCustomProductPanel
     );
 
 
-  saveCustomButton
+  saveCustomProductButton
     ?.addEventListener(
       "click",
       saveCustomProduct
     );
 
 
-  customNameInput
+  customProductName
     ?.addEventListener(
       "keydown",
       event => {
@@ -3308,48 +2681,6 @@
     );
 
 
-  listContainer
-    ?.addEventListener(
-      "change",
-      event => {
-        const checkbox =
-          event.target.closest(
-            "[data-toggle-item]"
-          );
-
-        if (!checkbox) {
-          return;
-        }
-
-        toggleWeeklyItem(
-          checkbox.dataset
-            .toggleItem
-        );
-      }
-    );
-
-
-  listContainer
-    ?.addEventListener(
-      "click",
-      event => {
-        const remove =
-          event.target.closest(
-            "[data-remove-item]"
-          );
-
-        if (!remove) {
-          return;
-        }
-
-        removeWeeklyItem(
-          remove.dataset
-            .removeItem
-        );
-      }
-    );
-
-
   /*
    * =====================================================
    * INITIALIZE
@@ -3357,16 +2688,13 @@
    */
 
   async function initialize() {
+    hideStatus();
+
+    populateQuantityDropdown();
+
     await loadProducts();
 
     renderWeeklyList();
-
-    /*
-     * Evidence coverage is supplemental.
-     * A failure here never prevents the app from working.
-     */
-
-    loadEvidenceRefreshStatus();
   }
 
 
