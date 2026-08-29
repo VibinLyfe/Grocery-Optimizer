@@ -1,0 +1,59 @@
+  [
+  {
+    "canonicalId": "ground-beef-organic-grassfed-85-15",
+    "retailer": "ALDI",
+    "title": "Simply Nature Organic Grass Fed 85% Lean Ground Beef",
+    "brand": "Simply Nature",
+    "description": "100% organic grass-fed ground beef, 85% lean / 15% fat",
+    "size": "1 lb",
+    "price": 5.99,
+    "productId": "19473448",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "retailer-product-page",
+    "observedAt": "2026-08-29"
+  },
+  {
+    "canonicalId": "organic-broccoli",
+    "retailer": "ALDI",
+    "title": "Organic Broccoli",
+    "description": "Fresh organic broccoli",
+    "size": "1 each",
+    "price": 3.65,
+    "productId": "16345572",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "retailer-product-page",
+    "observedAt": "2026-08-29"
+  },
+  {
+    "canonicalId": "organic-baby-carrots",
+    "retailer": "ALDI",
+    "title": "Organic Baby Peeled Carrots",
+    "description": "Organic baby peeled carrots",
+    "size": "16 oz",
+    "price": 1.99,
+    "productId": "26274154",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "retailer-product-page",
+    "observedAt": "2026-08-29"
+  },
+  {
+    "canonicalId": "mango",
+    "retailer": "ALDI",
+    "title": "Mango",
+    "description": "Fresh mango",
+    "size": "1 each",
+    "price": 1.05,
+    "productId": "19417475",
+    "market": "Knoxville, TN",
+    "locationConfirmed": false,
+    "marketConfirmed": false,
+    "sourceType": "retailer-product-page",
+    "observedAt": "2026-08-29"
+  }
+]
