@@ -1,118 +1,85 @@
 /*
+ * Toomey Grocery Optimized
  * netlify/functions/evidence-refresh.js
  *
- * Produces a refresh/discovery plan for Earth Fare
- * and Sprouts.
+ * Builds the pricing-evidence research / refresh plan.
  *
- * This function does NOT perform web searches and
- * does NOT scrape retailer websites.
+ * GET
+ * ----
+ * Uses the permanent catalog in public/products.json.
  *
- * It reads:
- *   - public/products.json
- *   - data/earthfare-evidence.json
- *   - data/sprouts-evidence.json
+ * POST
+ * ----
+ * Uses the permanent catalog PLUS custom products supplied
+ * by the browser:
  *
- * Then it reports which products are:
- *   - missing evidence
- *   - aging
- *   - stale
- *   - unknown
+ * {
+ *   "customProducts": [...]
+ * }
  *
- * It also generates suggested discovery queries
- * for the refresh workflow.
+ * This endpoint DOES NOT scrape retailer websites and
+ * DOES NOT invent prices.
+ *
+ * It only determines which products:
+ * - already have current evidence
+ * - have aging evidence
+ * - have stale evidence
+ * - have evidence with unknown age
+ * - have no evidence at all
  */
 
-const {
-  buildEarthFareDiscoveryPlan,
-  EARTH_FARE_REFRESH_MARKET
-} = require("./lib/earthfare-refresh");
-
-const {
-  buildSproutsDiscoveryPlan,
-  SPROUTS_REFRESH_MARKET
-} = require("./lib/sprouts-refresh");
+const fs = require("fs");
+const path = require("path");
 
 
 /*
  * =====================================================
- * LOAD FILES
+ * CONSTANTS
  * =====================================================
  */
 
-let PRODUCTS = [];
-let EARTH_FARE_EVIDENCE = [];
-let SPROUTS_EVIDENCE = [];
-
-let PRODUCT_LOAD_ERROR = null;
-let EARTH_FARE_LOAD_ERROR = null;
-let SPROUTS_LOAD_ERROR = null;
+const MAX_CURRENT_AGE_DAYS = 7;
+const MAX_AGING_AGE_DAYS = 14;
 
 
-try {
-  const loaded =
-    require("../../public/products.json");
+const RETAILERS = {
+  earthFare: {
+    retailer: "Earth Fare",
 
-  if (
-    Array.isArray(loaded)
-  ) {
-    PRODUCTS = loaded;
+    evidenceFile:
+      "earthfare-evidence.json",
 
-  } else {
-    PRODUCT_LOAD_ERROR =
-      "products.json loaded, but it is not a JSON array.";
+    location: {
+      retailer: "Earth Fare",
+      city: "Knoxville",
+      state: "TN",
+      zip: "37934",
+      address: "10903 Parkside Dr",
+      market: "Knoxville, TN"
+    }
+  },
+
+  sprouts: {
+    retailer: "Sprouts",
+
+    evidenceFile:
+      "sprouts-evidence.json",
+
+    location: {
+      retailer: "Sprouts",
+      city: "Knoxville",
+      state: "TN",
+      zip: "37922",
+      address: "9622 Kingston Pike",
+      market: "Knoxville, TN"
+    }
   }
-
-} catch (error) {
-  PRODUCT_LOAD_ERROR =
-    error.message;
-}
-
-
-try {
-  const loaded =
-    require("../../data/earthfare-evidence.json");
-
-  if (
-    Array.isArray(loaded)
-  ) {
-    EARTH_FARE_EVIDENCE =
-      loaded;
-
-  } else {
-    EARTH_FARE_LOAD_ERROR =
-      "earthfare-evidence.json loaded, but it is not a JSON array.";
-  }
-
-} catch (error) {
-  EARTH_FARE_LOAD_ERROR =
-    error.message;
-}
-
-
-try {
-  const loaded =
-    require("../../data/sprouts-evidence.json");
-
-  if (
-    Array.isArray(loaded)
-  ) {
-    SPROUTS_EVIDENCE =
-      loaded;
-
-  } else {
-    SPROUTS_LOAD_ERROR =
-      "sprouts-evidence.json loaded, but it is not a JSON array.";
-  }
-
-} catch (error) {
-  SPROUTS_LOAD_ERROR =
-    error.message;
-}
+};
 
 
 /*
  * =====================================================
- * RESPONSE HELPER
+ * RESPONSE HELPERS
  * =====================================================
  */
 
@@ -124,11 +91,20 @@ function json(
     statusCode,
 
     headers: {
-      "content-type":
-        "application/json; charset=utf-8",
+      "Content-Type":
+        "application/json",
 
-      "cache-control":
-        "no-store"
+      "Cache-Control":
+        "no-store",
+
+      "Access-Control-Allow-Origin":
+        "*",
+
+      "Access-Control-Allow-Headers":
+        "Content-Type",
+
+      "Access-Control-Allow-Methods":
+        "GET, POST, OPTIONS"
     },
 
     body:
@@ -143,21 +119,1079 @@ function json(
 
 /*
  * =====================================================
- * TARGET SUMMARY
+ * BASIC HELPERS
  * =====================================================
  */
 
-function summarizePlan(
-  plan
+function cleanText(
+  value
 ) {
-  const safePlan =
-    Array.isArray(plan)
-      ? plan
-      : [];
+  return String(
+    value || ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(
+      /\s+/g,
+      " "
+    );
+}
 
-  const summary = {
-    totalTargets:
-      safePlan.length,
+
+function slugify(
+  value
+) {
+  return cleanText(
+    value
+  )
+    .replace(
+      /[^a-z0-9]+/g,
+      "-"
+    )
+    .replace(
+      /^-+|-+$/g,
+      ""
+    );
+}
+
+
+function titleCase(
+  value
+) {
+  return String(
+    value || ""
+  )
+    .trim()
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .replace(
+      /\b\w/g,
+      character =>
+        character.toUpperCase()
+    );
+}
+
+
+/*
+ * =====================================================
+ * CUSTOM PRODUCT NAME NORMALIZATION
+ *
+ * This mirrors the conservative singular/plural behavior
+ * now used by compare.js.
+ *
+ * Example:
+ *
+ * Organic Japanese yam
+ * Organic Japanese yams
+ *
+ * both become:
+ *
+ * custom-organic-japanese-yams
+ * =====================================================
+ */
+
+const MASS_OR_UNCHANGED_WORDS =
+  new Set([
+    "beef",
+    "bread",
+    "broccoli",
+    "cheese",
+    "coffee",
+    "fish",
+    "milk",
+    "oats",
+    "oil",
+    "quinoa",
+    "rice",
+    "soap",
+    "spinach",
+    "turkey",
+    "water"
+  ]);
+
+
+const IRREGULAR_PLURALS = {
+  potato:
+    "potatoes",
+
+  tomato:
+    "tomatoes",
+
+  berry:
+    "berries",
+
+  cherry:
+    "cherries",
+
+  strawberry:
+    "strawberries",
+
+  blueberry:
+    "blueberries",
+
+  raspberry:
+    "raspberries",
+
+  cranberry:
+    "cranberries"
+};
+
+
+function pluralizeWord(
+  word
+) {
+  const value =
+    cleanText(
+      word
+    );
+
+
+  if (!value) {
+    return value;
+  }
+
+
+  if (
+    MASS_OR_UNCHANGED_WORDS
+      .has(value)
+  ) {
+    return value;
+  }
+
+
+  if (
+    IRREGULAR_PLURALS[
+      value
+    ]
+  ) {
+    return (
+      IRREGULAR_PLURALS[
+        value
+      ]
+    );
+  }
+
+
+  if (
+    value.endsWith(
+      "ies"
+    ) ||
+    value.endsWith(
+      "oes"
+    )
+  ) {
+    return value;
+  }
+
+
+  if (
+    value.endsWith("s") &&
+    !value.endsWith("ss")
+  ) {
+    return value;
+  }
+
+
+  if (
+    /[^aeiou]y$/.test(
+      value
+    )
+  ) {
+    return (
+      value.slice(
+        0,
+        -1
+      ) +
+      "ies"
+    );
+  }
+
+
+  if (
+    /(s|x|z|ch|sh)$/.test(
+      value
+    )
+  ) {
+    return (
+      value +
+      "es"
+    );
+  }
+
+
+  return (
+    value +
+    "s"
+  );
+}
+
+
+function normalizeCustomName(
+  value
+) {
+  const words =
+    cleanText(
+      value
+    )
+      .split(/\s+/)
+      .filter(Boolean);
+
+
+  if (!words.length) {
+    return "";
+  }
+
+
+  const lastIndex =
+    words.length - 1;
+
+
+  words[
+    lastIndex
+  ] =
+    pluralizeWord(
+      words[
+        lastIndex
+      ]
+    );
+
+
+  return words.join(" ");
+}
+
+
+function customCanonicalId(
+  value
+) {
+  const normalized =
+    normalizeCustomName(
+      value
+    );
+
+
+  return (
+    `custom-${slugify(
+      normalized
+    )}`
+  );
+}
+
+
+/*
+ * =====================================================
+ * FILE PATH HELPERS
+ * =====================================================
+ */
+
+function candidatePaths(
+  ...parts
+) {
+  return [
+    path.join(
+      process.cwd(),
+      ...parts
+    ),
+
+    path.join(
+      __dirname,
+      "..",
+      "..",
+      ...parts
+    )
+  ];
+}
+
+
+function readJSONFromPaths(
+  paths
+) {
+  let lastError =
+    null;
+
+
+  for (
+    const filePath of
+    paths
+  ) {
+    try {
+      if (
+        !fs.existsSync(
+          filePath
+        )
+      ) {
+        continue;
+      }
+
+
+      return {
+        data:
+          JSON.parse(
+            fs.readFileSync(
+              filePath,
+              "utf8"
+            )
+          ),
+
+        error:
+          null,
+
+        filePath
+      };
+
+    } catch (
+      error
+    ) {
+      lastError =
+        error.message;
+    }
+  }
+
+
+  return {
+    data:
+      null,
+
+    error:
+      lastError ||
+      "File was not found.",
+
+    filePath:
+      null
+  };
+}
+
+
+/*
+ * =====================================================
+ * STATIC PRODUCT CATALOG
+ * =====================================================
+ */
+
+function loadBaseCatalog() {
+  const result =
+    readJSONFromPaths(
+      candidatePaths(
+        "public",
+        "products.json"
+      )
+    );
+
+
+  if (
+    !Array.isArray(
+      result.data
+    )
+  ) {
+    return {
+      products: [],
+      error:
+        result.error ||
+        "products.json did not contain an array."
+    };
+  }
+
+
+  return {
+    products:
+      result.data,
+
+    error:
+      null
+  };
+}
+
+
+/*
+ * =====================================================
+ * EVIDENCE FILE
+ * =====================================================
+ */
+
+function loadEvidence(
+  filename
+) {
+  const result =
+    readJSONFromPaths(
+      candidatePaths(
+        "data",
+        filename
+      )
+    );
+
+
+  if (
+    !Array.isArray(
+      result.data
+    )
+  ) {
+    return {
+      records: [],
+
+      error:
+        result.error ||
+        `${filename} did not contain an array.`
+    };
+  }
+
+
+  return {
+    records:
+      result.data,
+
+    error:
+      null
+  };
+}
+
+
+/*
+ * =====================================================
+ * CATALOG NORMALIZATION
+ * =====================================================
+ */
+
+function normalizeBaseProduct(
+  product
+) {
+  if (!product) {
+    return null;
+  }
+
+
+  const id =
+    product.id ||
+    product.canonicalId ||
+    product.canonical_id ||
+    null;
+
+
+  const label =
+    product.label ||
+    product.name ||
+    product.queryName ||
+    id;
+
+
+  if (
+    !id ||
+    !label
+  ) {
+    return null;
+  }
+
+
+  return {
+    id:
+      String(id),
+
+    label:
+      String(label),
+
+    category:
+      product.category ||
+      "Other",
+
+    queryName:
+      product.queryName ||
+      product.query ||
+      cleanText(
+        label
+      ),
+
+    defaultUnit:
+      product.defaultUnit ||
+      product.unit ||
+      "each",
+
+    allowedUnits:
+      Array.isArray(
+        product.allowedUnits
+      )
+        ? product.allowedUnits
+        : [
+            product.defaultUnit ||
+            product.unit ||
+            "each"
+          ],
+
+    custom:
+      false
+  };
+}
+
+
+function normalizeCustomProduct(
+  product
+) {
+  if (!product) {
+    return null;
+  }
+
+
+  const rawName =
+    product.queryName ||
+    product.label ||
+    product.name ||
+    "";
+
+
+  if (
+    !cleanText(
+      rawName
+    )
+  ) {
+    return null;
+  }
+
+
+  const normalizedName =
+    normalizeCustomName(
+      rawName
+    );
+
+
+  const id =
+    customCanonicalId(
+      rawName
+    );
+
+
+  const defaultUnit =
+    product.defaultUnit ||
+    product.unit ||
+    (
+      Array.isArray(
+        product.allowedUnits
+      )
+        ? product.allowedUnits[0]
+        : null
+    ) ||
+    "each";
+
+
+  return {
+    id,
+
+    label:
+      product.label ||
+      product.name ||
+      titleCase(
+        normalizedName
+      ),
+
+    category:
+      product.category ||
+      "Other",
+
+    /*
+     * Keep the shopper's useful wording for searches.
+     * The ID is normalized for identity, but the query
+     * does not need artificial pluralization.
+     */
+
+    queryName:
+      cleanText(
+        rawName
+      ),
+
+    defaultUnit,
+
+    allowedUnits:
+      Array.isArray(
+        product.allowedUnits
+      ) &&
+      product.allowedUnits.length
+        ? product.allowedUnits
+        : [
+            defaultUnit
+          ],
+
+    custom:
+      true,
+
+    originalId:
+      product.id ||
+      null
+  };
+}
+
+
+/*
+ * =====================================================
+ * MERGE CATALOG
+ * =====================================================
+ */
+
+function mergeCatalog(
+  baseProducts,
+  customProducts
+) {
+  const merged =
+    new Map();
+
+
+  for (
+    const rawProduct of
+    baseProducts
+  ) {
+    const product =
+      normalizeBaseProduct(
+        rawProduct
+      );
+
+
+    if (!product) {
+      continue;
+    }
+
+
+    merged.set(
+      product.id,
+      product
+    );
+  }
+
+
+  for (
+    const rawProduct of
+    customProducts
+  ) {
+    const product =
+      normalizeCustomProduct(
+        rawProduct
+      );
+
+
+    if (!product) {
+      continue;
+    }
+
+
+    /*
+     * Do not replace a permanent catalog product if a
+     * custom product happens to normalize to its ID.
+     */
+
+    if (
+      !merged.has(
+        product.id
+      )
+    ) {
+      merged.set(
+        product.id,
+        product
+      );
+    }
+  }
+
+
+  return [
+    ...merged.values()
+  ];
+}
+
+
+/*
+ * =====================================================
+ * FRESHNESS
+ * =====================================================
+ */
+
+function calculateAgeDays(
+  observedAt
+) {
+  if (!observedAt) {
+    return null;
+  }
+
+
+  const observed =
+    new Date(
+      observedAt
+    );
+
+
+  if (
+    Number.isNaN(
+      observed.getTime()
+    )
+  ) {
+    return null;
+  }
+
+
+  return Math.max(
+    0,
+    Math.floor(
+      (
+        Date.now() -
+        observed.getTime()
+      ) /
+      86400000
+    )
+  );
+}
+
+
+function getFreshnessStatus(
+  observedAt
+) {
+  const ageDays =
+    calculateAgeDays(
+      observedAt
+    );
+
+
+  if (
+    ageDays === null
+  ) {
+    return {
+      freshness:
+        "unknown",
+
+      ageDays:
+        null,
+
+      needsRefresh:
+        true
+    };
+  }
+
+
+  if (
+    ageDays <=
+    MAX_CURRENT_AGE_DAYS
+  ) {
+    return {
+      freshness:
+        "current",
+
+      ageDays,
+
+      needsRefresh:
+        false
+    };
+  }
+
+
+  if (
+    ageDays <=
+    MAX_AGING_AGE_DAYS
+  ) {
+    return {
+      freshness:
+        "aging",
+
+      ageDays,
+
+      needsRefresh:
+        true
+    };
+  }
+
+
+  return {
+    freshness:
+      "stale",
+
+    ageDays,
+
+    needsRefresh:
+      true
+  };
+}
+
+
+/*
+ * =====================================================
+ * PRODUCT EVIDENCE LOOKUP
+ * =====================================================
+ */
+
+function recordsForProduct(
+  product,
+  evidenceRecords
+) {
+  return (
+    evidenceRecords
+      .filter(
+        record => {
+          if (!record) {
+            return false;
+          }
+
+
+          const canonical =
+            record.canonicalId ||
+            record.canonical_id ||
+            null;
+
+
+          return (
+            canonical ===
+            product.id
+          );
+        }
+      )
+  );
+}
+
+
+/*
+ * =====================================================
+ * PICK BEST EVIDENCE STATE
+ * =====================================================
+ */
+
+function evidenceState(
+  product,
+  evidenceRecords
+) {
+  const records =
+    recordsForProduct(
+      product,
+      evidenceRecords
+    );
+
+
+  if (!records.length) {
+    return {
+      reason:
+        "missing-evidence",
+
+      freshness:
+        "missing",
+
+      ageDays:
+        null,
+
+      evidenceCount:
+        0,
+
+      observedAt:
+        null
+    };
+  }
+
+
+  const evaluated =
+    records.map(
+      record => {
+        const state =
+          getFreshnessStatus(
+            record.observedAt
+          );
+
+
+        return {
+          record,
+          ...state
+        };
+      }
+    );
+
+
+  /*
+   * Any current evidence means the product does not
+   * need to become a refresh target.
+   */
+
+  const current =
+    evaluated
+      .filter(
+        item =>
+          item.freshness ===
+          "current"
+      )
+      .sort(
+        (a, b) =>
+          (
+            a.ageDays ??
+            Number.MAX_SAFE_INTEGER
+          ) -
+          (
+            b.ageDays ??
+            Number.MAX_SAFE_INTEGER
+          )
+      );
+
+
+  if (
+    current.length
+  ) {
+    return {
+      reason:
+        "current-evidence",
+
+      freshness:
+        "current",
+
+      ageDays:
+        current[0]
+          .ageDays,
+
+      evidenceCount:
+        records.length,
+
+      observedAt:
+        current[0]
+          .record
+          .observedAt ||
+        null
+    };
+  }
+
+
+  const aging =
+    evaluated
+      .filter(
+        item =>
+          item.freshness ===
+          "aging"
+      )
+      .sort(
+        (a, b) =>
+          a.ageDays -
+          b.ageDays
+      );
+
+
+  if (
+    aging.length
+  ) {
+    return {
+      reason:
+        "aging-evidence",
+
+      freshness:
+        "aging",
+
+      ageDays:
+        aging[0]
+          .ageDays,
+
+      evidenceCount:
+        records.length,
+
+      observedAt:
+        aging[0]
+          .record
+          .observedAt ||
+        null
+    };
+  }
+
+
+  const stale =
+    evaluated
+      .filter(
+        item =>
+          item.freshness ===
+          "stale"
+      )
+      .sort(
+        (a, b) =>
+          a.ageDays -
+          b.ageDays
+      );
+
+
+  if (
+    stale.length
+  ) {
+    return {
+      reason:
+        "stale-evidence",
+
+      freshness:
+        "stale",
+
+      ageDays:
+        stale[0]
+          .ageDays,
+
+      evidenceCount:
+        records.length,
+
+      observedAt:
+        stale[0]
+          .record
+          .observedAt ||
+        null
+    };
+  }
+
+
+  return {
+    reason:
+      "unknown-evidence-age",
+
+    freshness:
+      "unknown",
+
+    ageDays:
+      null,
+
+    evidenceCount:
+      records.length,
+
+    observedAt:
+      null
+  };
+}
+
+
+/*
+ * =====================================================
+ * DISCOVERY SEARCH QUERIES
+ * =====================================================
+ */
+
+function buildQueries(
+  retailer,
+  product
+) {
+  const queryName =
+    product.queryName ||
+    product.label;
+
+
+  return [
+    `${retailer} ${queryName} Knoxville TN price`,
+
+    `"${queryName}" "${retailer}"`,
+
+    `${retailer} ${queryName} weekly ad`
+  ];
+}
+
+
+/*
+ * =====================================================
+ * RETAILER PLAN
+ * =====================================================
+ */
+
+function buildRetailerPlan(
+  retailerConfig,
+  catalog
+) {
+  const evidence =
+    loadEvidence(
+      retailerConfig
+        .evidenceFile
+    );
+
+
+  const targets =
+    [];
+
+
+  const coverage = {
+    current:
+      0,
 
     missing:
       0,
@@ -174,99 +1208,173 @@ function summarizePlan(
 
 
   for (
-    const target of
-    safePlan
+    const product of
+    catalog
   ) {
-    const reason =
-      String(
-        target?.reason ||
-        ""
+    const state =
+      evidenceState(
+        product,
+        evidence.records
       );
 
+
     if (
-      reason ===
-      "missing-evidence"
+      state.freshness ===
+      "current"
     ) {
-      summary.missing +=
+      coverage.current +=
+        1;
+
+      continue;
+    }
+
+
+    if (
+      state.freshness ===
+      "missing"
+    ) {
+      coverage.missing +=
         1;
 
     } else if (
-      reason ===
-      "aging-evidence"
+      state.freshness ===
+      "aging"
     ) {
-      summary.aging +=
+      coverage.aging +=
         1;
 
     } else if (
-      reason ===
-      "stale-evidence"
+      state.freshness ===
+      "stale"
     ) {
-      summary.stale +=
+      coverage.stale +=
         1;
 
-    } else if (
-      reason ===
-      "unknown-evidence"
-    ) {
-      summary.unknown +=
+    } else {
+      coverage.unknown +=
         1;
     }
+
+
+    targets.push({
+      id:
+        product.id,
+
+      label:
+        product.label,
+
+      category:
+        product.category,
+
+      queryName:
+        product.queryName,
+
+      defaultUnit:
+        product.defaultUnit,
+
+      custom:
+        Boolean(
+          product.custom
+        ),
+
+      reason:
+        state.reason,
+
+      freshness:
+        state.freshness,
+
+      ageDays:
+        state.ageDays,
+
+      observedAt:
+        state.observedAt,
+
+      evidenceCount:
+        state.evidenceCount,
+
+      queries:
+        buildQueries(
+          retailerConfig
+            .retailer,
+          product
+        )
+    });
   }
 
 
-  return summary;
+  return {
+    retailer:
+      retailerConfig
+        .retailer,
+
+    location:
+      retailerConfig
+        .location,
+
+    evidenceRecordCount:
+      evidence.records
+        .length,
+
+    loadError:
+      evidence.error,
+
+    summary: {
+      /*
+       * Keep totalTargets for compatibility with the
+       * existing frontend / diagnostic output.
+       */
+
+      totalTargets:
+        targets.length,
+
+      current:
+        coverage.current,
+
+      missing:
+        coverage.missing,
+
+      aging:
+        coverage.aging,
+
+      stale:
+        coverage.stale,
+
+      unknown:
+        coverage.unknown
+    },
+
+    targets
+  };
 }
 
 
 /*
  * =====================================================
- * NORMALIZE TARGET FOR OUTPUT
+ * REQUEST BODY
  * =====================================================
  */
 
-function formatTarget(
-  target
+function parseBody(
+  event
 ) {
-  const product =
-    target?.product ||
-    {};
+  if (
+    !event.body
+  ) {
+    return {};
+  }
 
-  return {
-    id:
-      product.id ||
-      null,
 
-    label:
-      product.label ||
-      null,
+  try {
+    return (
+      JSON.parse(
+        event.body
+      ) ||
+      {}
+    );
 
-    category:
-      product.category ||
-      null,
-
-    queryName:
-      product.queryName ||
-      null,
-
-    defaultUnit:
-      product.defaultUnit ||
-      null,
-
-    reason:
-      target?.reason ||
-      null,
-
-    freshness:
-      target?.freshness ||
-      null,
-
-    queries:
-      Array.isArray(
-        target?.queries
-      )
-        ? target.queries
-        : []
-  };
+  } catch {
+    return {};
+  }
 }
 
 
@@ -277,150 +1385,165 @@ function formatTarget(
  */
 
 exports.handler =
-  async function () {
+  async function (
+    event
+  ) {
     try {
+      const method =
+        String(
+          event.httpMethod ||
+          "GET"
+        )
+          .toUpperCase();
 
-      /*
-       * Fail clearly if the main product catalog
-       * could not be loaded.
-       */
 
       if (
-        PRODUCT_LOAD_ERROR
+        method ===
+        "OPTIONS"
       ) {
         return json(
-          500,
+          200,
           {
-            ok: false,
-
-            error:
-              "Product catalog could not be loaded.",
-
-            details:
-              PRODUCT_LOAD_ERROR
+            ok:
+              true
           }
         );
       }
 
 
-      /*
-       * =================================================
-       * EARTH FARE
-       * =================================================
-       */
-
-      let earthFarePlan = [];
-
       if (
-        !EARTH_FARE_LOAD_ERROR
+        method !==
+          "GET" &&
+        method !==
+          "POST"
       ) {
-        earthFarePlan =
-          buildEarthFareDiscoveryPlan({
-            products:
-              PRODUCTS,
+        return json(
+          405,
+          {
+            ok:
+              false,
 
-            evidenceRecords:
-              EARTH_FARE_EVIDENCE
-          });
+            message:
+              "Use GET or POST."
+          }
+        );
       }
 
 
-      /*
-       * =================================================
-       * SPROUTS
-       * =================================================
-       */
+      const base =
+        loadBaseCatalog();
 
-      let sproutsPlan = [];
 
       if (
-        !SPROUTS_LOAD_ERROR
+        base.error
       ) {
-        sproutsPlan =
-          buildSproutsDiscoveryPlan({
-            products:
-              PRODUCTS,
+        return json(
+          500,
+          {
+            ok:
+              false,
 
-            evidenceRecords:
-              SPROUTS_EVIDENCE
-          });
+            message:
+              "Could not load the permanent grocery catalog.",
+
+            error:
+              base.error
+          }
+        );
       }
 
 
-      /*
-       * =================================================
-       * RESPONSE
-       * =================================================
-       */
+      const body =
+        method ===
+        "POST"
+          ? parseBody(
+              event
+            )
+          : {};
+
+
+      const suppliedCustomProducts =
+        Array.isArray(
+          body.customProducts
+        )
+          ? body.customProducts
+          : [];
+
+
+      const catalog =
+        mergeCatalog(
+          base.products,
+          suppliedCustomProducts
+        );
+
+
+      const normalizedBaseCount =
+        base.products
+          .map(
+            normalizeBaseProduct
+          )
+          .filter(Boolean)
+          .length;
+
+
+      const customCatalogCount =
+        catalog.filter(
+          product =>
+            product.custom
+        ).length;
+
+
+      const earthFare =
+        buildRetailerPlan(
+          RETAILERS
+            .earthFare,
+          catalog
+        );
+
+
+      const sprouts =
+        buildRetailerPlan(
+          RETAILERS
+            .sprouts,
+          catalog
+        );
+
 
       return json(
         200,
         {
-          ok: true,
+          ok:
+            true,
 
           generatedAt:
             new Date()
               .toISOString(),
 
+          requestMode:
+            method ===
+            "POST"
+              ? "catalog-plus-custom-products"
+              : "static-catalog-only",
+
           catalog: {
             productCount:
-              PRODUCTS.length
+              catalog.length,
+
+            baseProductCount:
+              normalizedBaseCount,
+
+            customProductCount:
+              customCatalogCount,
+
+            receivedCustomProductCount:
+              suppliedCustomProducts
+                .length
           },
 
-
           retailers: {
+            earthFare,
 
-            earthFare: {
-              retailer:
-                "Earth Fare",
-
-              location:
-                EARTH_FARE_REFRESH_MARKET,
-
-              evidenceRecordCount:
-                EARTH_FARE_EVIDENCE
-                  .length,
-
-              loadError:
-                EARTH_FARE_LOAD_ERROR,
-
-              summary:
-                summarizePlan(
-                  earthFarePlan
-                ),
-
-              targets:
-                earthFarePlan.map(
-                  formatTarget
-                )
-            },
-
-
-            sprouts: {
-              retailer:
-                "Sprouts",
-
-              location:
-                SPROUTS_REFRESH_MARKET,
-
-              evidenceRecordCount:
-                SPROUTS_EVIDENCE
-                  .length,
-
-              loadError:
-                SPROUTS_LOAD_ERROR,
-
-              summary:
-                summarizePlan(
-                  sproutsPlan
-                ),
-
-              targets:
-                sproutsPlan.map(
-                  formatTarget
-                )
-            }
-
+            sprouts
           }
         }
       );
@@ -428,10 +1551,17 @@ exports.handler =
     } catch (
       error
     ) {
+      console.error(
+        "Evidence refresh error:",
+        error
+      );
+
+
       return json(
         500,
         {
-          ok: false,
+          ok:
+            false,
 
           error:
             error.message
