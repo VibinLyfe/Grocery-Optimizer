@@ -12,12 +12,13 @@
  * - compare unchecked grocery items
  * - build Lowest Cost / Best Balance / One Store plans
  * - show package, quantity, freshness and confidence detail
+ * - score Best Balance using cost, stops and overbuy
  */
 
 
 /*
  * =====================================================
- * STORAGE
+ * STORAGE / OPTIMIZER SETTINGS
  * =====================================================
  */
 
@@ -30,7 +31,38 @@ const CUSTOM_PRODUCTS_KEY =
 const PRICING_STATUS_KEY =
   "toomey-pricing-status-v1";
 
+
+/*
+ * Cost assigned to every store stop after the first.
+ *
+ * Example:
+ * 1 store = $0 penalty
+ * 2 stores = $5 penalty
+ * 3 stores = $10 penalty
+ */
 const STOP_PENALTY = 5;
+
+
+/*
+ * Best Balance also discourages excessive package overbuy.
+ *
+ * The actual purchase cost is already included in the grocery
+ * total, so this is only an additional convenience / waste
+ * penalty used to rank plans.
+ */
+const OVERBUY_PENALTY_RATE =
+  0.4;
+
+
+/*
+ * If the shopper has to buy more than 50% above the requested
+ * amount, add an additional penalty.
+ */
+const HEAVY_OVERBUY_THRESHOLD =
+  0.5;
+
+const HEAVY_OVERBUY_PENALTY =
+  2.5;
 
 
 /*
@@ -40,67 +72,109 @@ const STOP_PENALTY = 5;
  */
 
 const productSelect =
-  document.getElementById("productSelect");
+  document.getElementById(
+    "productSelect"
+  );
 
 const quantitySelect =
-  document.getElementById("quantitySelect");
+  document.getElementById(
+    "quantitySelect"
+  );
 
 const unitSelect =
-  document.getElementById("unitSelect");
+  document.getElementById(
+    "unitSelect"
+  );
 
 const addItemButton =
-  document.getElementById("addItemButton");
+  document.getElementById(
+    "addItemButton"
+  );
 
 const resetListButton =
-  document.getElementById("resetListButton");
+  document.getElementById(
+    "resetListButton"
+  );
 
 const compareButton =
-  document.getElementById("compareButton");
+  document.getElementById(
+    "compareButton"
+  );
 
 const groceryList =
-  document.getElementById("groceryList");
+  document.getElementById(
+    "groceryList"
+  );
 
 const remainingItemCount =
-  document.getElementById("remainingItemCount");
+  document.getElementById(
+    "remainingItemCount"
+  );
 
 const statusSection =
-  document.getElementById("statusSection");
+  document.getElementById(
+    "statusSection"
+  );
 
 const status =
-  document.getElementById("status");
+  document.getElementById(
+    "status"
+  );
 
 const resultsSection =
-  document.getElementById("resultsSection");
+  document.getElementById(
+    "resultsSection"
+  );
 
 const results =
-  document.getElementById("results");
+  document.getElementById(
+    "results"
+  );
 
 const openCustomProductButton =
-  document.getElementById("openCustomProductButton");
+  document.getElementById(
+    "openCustomProductButton"
+  );
 
 const closeCustomProductButton =
-  document.getElementById("closeCustomProductButton");
+  document.getElementById(
+    "closeCustomProductButton"
+  );
 
 const customProductPanel =
-  document.getElementById("customProductPanel");
+  document.getElementById(
+    "customProductPanel"
+  );
 
 const customProductName =
-  document.getElementById("customProductName");
+  document.getElementById(
+    "customProductName"
+  );
 
 const customProductCategory =
-  document.getElementById("customProductCategory");
+  document.getElementById(
+    "customProductCategory"
+  );
 
 const customProductDefaultUnit =
-  document.getElementById("customProductDefaultUnit");
+  document.getElementById(
+    "customProductDefaultUnit"
+  );
 
 const saveCustomProductButton =
-  document.getElementById("saveCustomProductButton");
+  document.getElementById(
+    "saveCustomProductButton"
+  );
 
 const groceryItemTemplate =
-  document.getElementById("groceryItemTemplate");
+  document.getElementById(
+    "groceryItemTemplate"
+  );
 
 const optimizationCardTemplate =
-  document.getElementById("optimizationCardTemplate");
+  document.getElementById(
+    "optimizationCardTemplate"
+  );
 
 
 /*
@@ -144,13 +218,18 @@ function loadStorage(
 ) {
   try {
     const raw =
-      localStorage.getItem(key);
+      localStorage.getItem(
+        key
+      );
 
     if (!raw) {
       return fallback;
     }
 
-    return JSON.parse(raw);
+    return JSON.parse(
+      raw
+    );
+
   } catch {
     return fallback;
   }
@@ -163,7 +242,9 @@ function saveStorage(
 ) {
   localStorage.setItem(
     key,
-    JSON.stringify(value)
+    JSON.stringify(
+      value
+    )
   );
 }
 
@@ -194,27 +275,48 @@ function savePricingStatus() {
 
 /*
  * =====================================================
- * TEXT HELPERS
+ * TEXT / DISPLAY HELPERS
  * =====================================================
  */
 
-function cleanText(value) {
-  return String(value || "")
+function cleanText(
+  value
+) {
+  return String(
+    value || ""
+  )
     .trim()
-    .replace(/\s+/g, " ");
+    .replace(
+      /\s+/g,
+      " "
+    );
 }
 
 
-function slugify(value) {
-  return cleanText(value)
+function slugify(
+  value
+) {
+  return cleanText(
+    value
+  )
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(
+      /[^a-z0-9]+/g,
+      "-"
+    )
+    .replace(
+      /^-+|-+$/g,
+      ""
+    );
 }
 
 
-function titleCase(value) {
-  return cleanText(value).replace(
+function titleCase(
+  value
+) {
+  return cleanText(
+    value
+  ).replace(
     /\b\w/g,
     letter =>
       letter.toUpperCase()
@@ -222,12 +324,18 @@ function titleCase(value) {
 }
 
 
-function money(value) {
+function money(
+  value
+) {
   const number =
-    Number(value);
+    Number(
+      value
+    );
 
   if (
-    !Number.isFinite(number)
+    !Number.isFinite(
+      number
+    )
   ) {
     return "—";
   }
@@ -235,15 +343,53 @@ function money(value) {
   return number.toLocaleString(
     "en-US",
     {
-      style: "currency",
-      currency: "USD"
+      style:
+        "currency",
+
+      currency:
+        "USD"
     }
   );
 }
 
 
-function unitLabel(unit) {
-  if (unit === "fl_oz") {
+function round(
+  value,
+  decimals = 2
+) {
+  const number =
+    Number(
+      value
+    );
+
+  if (
+    !Number.isFinite(
+      number
+    )
+  ) {
+    return null;
+  }
+
+  const factor =
+    10 ** decimals;
+
+  return (
+    Math.round(
+      number *
+      factor
+    ) /
+    factor
+  );
+}
+
+
+function unitLabel(
+  unit
+) {
+  if (
+    unit ===
+    "fl_oz"
+  ) {
     return "fl oz";
   }
 
@@ -251,44 +397,77 @@ function unitLabel(unit) {
 }
 
 
-function prettyFreshness(value) {
+function prettyFreshness(
+  value
+) {
   if (!value) {
     return null;
   }
 
   const map = {
-    current: "Current price",
-    aging: "Price aging",
-    stale: "Price stale",
-    unknown: "Price date unknown"
+    current:
+      "Current price",
+
+    aging:
+      "Price aging",
+
+    stale:
+      "Price stale",
+
+    unknown:
+      "Price date unknown"
   };
 
   return (
     map[value] ||
-    titleCase(value)
+    titleCase(
+      value
+    )
   );
 }
 
 
-function confidenceLabel(score) {
+function confidenceLabel(
+  score
+) {
   const number =
-    Number(score);
+    Number(
+      score
+    );
 
   if (
-    !Number.isFinite(number)
+    !Number.isFinite(
+      number
+    )
   ) {
     return null;
   }
 
-  if (number >= 90) {
-    return `High confidence ${Math.round(number)}%`;
+  if (
+    number >= 90
+  ) {
+    return (
+      `High confidence ${Math.round(
+        number
+      )}%`
+    );
   }
 
-  if (number >= 70) {
-    return `Good confidence ${Math.round(number)}%`;
+  if (
+    number >= 70
+  ) {
+    return (
+      `Good confidence ${Math.round(
+        number
+      )}%`
+    );
   }
 
-  return `Confidence ${Math.round(number)}%`;
+  return (
+    `Confidence ${Math.round(
+      number
+    )}%`
+  );
 }
 
 
@@ -319,7 +498,9 @@ function normalizeProduct(
 
   const id =
     product.id ||
-    `custom-${slugify(label)}`;
+    `custom-${slugify(
+      label
+    )}`;
 
   return {
     id,
@@ -340,9 +521,14 @@ function normalizeProduct(
       Array.isArray(
         product.allowedUnits
       ) &&
-      product.allowedUnits.length
-        ? product.allowedUnits
-        : [defaultUnit],
+      product.allowedUnits
+        .length
+        ? product
+            .allowedUnits
+
+        : [
+            defaultUnit
+          ],
 
     custom:
       Boolean(
@@ -363,7 +549,9 @@ function rebuildCatalog() {
             false
           )
       )
-      .filter(Boolean);
+      .filter(
+        Boolean
+      );
 
   const normalizedCustom =
     customProducts
@@ -374,7 +562,9 @@ function rebuildCatalog() {
             true
           )
       )
-      .filter(Boolean);
+      .filter(
+        Boolean
+      );
 
   const map =
     new Map();
@@ -387,7 +577,9 @@ function rebuildCatalog() {
     ]
   ) {
     if (
-      !map.has(product.id)
+      !map.has(
+        product.id
+      )
     ) {
       map.set(
         product.id,
@@ -397,7 +589,9 @@ function rebuildCatalog() {
   }
 
   catalog =
-    [...map.values()];
+    [
+      ...map.values()
+    ];
 
   populateProductDropdown();
 }
@@ -415,11 +609,14 @@ async function loadProducts() {
       await fetch(
         "/products.json",
         {
-          cache: "no-store"
+          cache:
+            "no-store"
         }
       );
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       throw new Error(
         "Could not load product catalog."
       );
@@ -429,17 +626,25 @@ async function loadProducts() {
       await response.json();
 
     baseProducts =
-      Array.isArray(data)
+      Array.isArray(
+        data
+      )
         ? data
         : [];
 
-  } catch (error) {
-    console.error(error);
+  } catch (
+    error
+  ) {
+    console.error(
+      error
+    );
 
-    baseProducts = [];
+    baseProducts =
+      [];
   }
 
   rebuildCatalog();
+
   renderWeeklyList();
 }
 
@@ -451,21 +656,25 @@ async function loadProducts() {
  */
 
 function populateProductDropdown() {
-  if (!productSelect) {
+  if (
+    !productSelect
+  ) {
     return;
   }
 
   const selected =
     productSelect.value;
 
-  productSelect.innerHTML = "";
+  productSelect.innerHTML =
+    "";
 
   const placeholder =
     document.createElement(
       "option"
     );
 
-  placeholder.value = "";
+  placeholder.value =
+    "";
 
   placeholder.textContent =
     "Select a product";
@@ -486,7 +695,9 @@ function populateProductDropdown() {
       "Other";
 
     if (
-      !groups.has(category)
+      !groups.has(
+        category
+      )
     ) {
       groups.set(
         category,
@@ -495,12 +706,18 @@ function populateProductDropdown() {
     }
 
     groups
-      .get(category)
-      .push(product);
+      .get(
+        category
+      )
+      .push(
+        product
+      );
   }
 
   const sortedCategories =
-    [...groups.keys()].sort();
+    [
+      ...groups.keys()
+    ].sort();
 
   for (
     const category of
@@ -516,9 +733,14 @@ function populateProductDropdown() {
 
     const products =
       groups
-        .get(category)
+        .get(
+          category
+        )
         .sort(
-          (a, b) =>
+          (
+            a,
+            b
+          ) =>
             a.label.localeCompare(
               b.label
             )
@@ -573,7 +795,9 @@ function populateProductDropdown() {
  */
 
 function populateQuantityDropdown() {
-  if (!quantitySelect) {
+  if (
+    !quantitySelect
+  ) {
     return;
   }
 
@@ -604,7 +828,8 @@ function populateQuantityDropdown() {
     100
   ];
 
-  quantitySelect.innerHTML = "";
+  quantitySelect.innerHTML =
+    "";
 
   for (
     const value of
@@ -616,10 +841,14 @@ function populateQuantityDropdown() {
       );
 
     option.value =
-      String(value);
+      String(
+        value
+      );
 
     option.textContent =
-      String(value);
+      String(
+        value
+      );
 
     quantitySelect.appendChild(
       option
@@ -637,11 +866,14 @@ function populateQuantityDropdown() {
  * =====================================================
  */
 
-function getProductById(id) {
+function getProductById(
+  id
+) {
   return (
     catalog.find(
       product =>
-        product.id === id
+        product.id ===
+        id
     ) ||
     null
   );
@@ -650,7 +882,8 @@ function getProductById(id) {
 
 function currentSelectedProduct() {
   return getProductById(
-    productSelect?.value
+    productSelect
+      ?.value
   );
 }
 
@@ -662,22 +895,30 @@ function currentSelectedProduct() {
  */
 
 function syncUnitDropdown() {
-  if (!unitSelect) {
+  if (
+    !unitSelect
+  ) {
     return;
   }
 
   const product =
     currentSelectedProduct();
 
-  unitSelect.innerHTML = "";
+  unitSelect.innerHTML =
+    "";
 
   const units =
-    product?.allowedUnits?.length
-      ? product.allowedUnits
-      : [
-          product?.defaultUnit ||
-          "each"
-        ];
+    product
+      ?.allowedUnits
+      ?.length
+        ? product
+            .allowedUnits
+
+        : [
+            product
+              ?.defaultUnit ||
+            "each"
+          ];
 
   for (
     const unit of
@@ -692,7 +933,9 @@ function syncUnitDropdown() {
       unit;
 
     option.textContent =
-      unitLabel(unit);
+      unitLabel(
+        unit
+      );
 
     unitSelect.appendChild(
       option
@@ -700,10 +943,12 @@ function syncUnitDropdown() {
   }
 
   if (
-    product?.defaultUnit
+    product
+      ?.defaultUnit
   ) {
     unitSelect.value =
-      product.defaultUnit;
+      product
+        .defaultUnit;
   }
 }
 
@@ -715,15 +960,20 @@ function syncUnitDropdown() {
  */
 
 function openCustomProductPanel() {
-  if (!customProductPanel) {
+  if (
+    !customProductPanel
+  ) {
     return;
   }
 
   customProductPanel.hidden =
     false;
 
-  customProductPanel.classList
-    .remove("hidden");
+  customProductPanel
+    .classList
+    .remove(
+      "hidden"
+    );
 
   requestAnimationFrame(
     () => {
@@ -735,15 +985,20 @@ function openCustomProductPanel() {
 
 
 function closeCustomProductPanel() {
-  if (!customProductPanel) {
+  if (
+    !customProductPanel
+  ) {
     return;
   }
 
   customProductPanel.hidden =
     true;
 
-  customProductPanel.classList
-    .add("hidden");
+  customProductPanel
+    .classList
+    .add(
+      "hidden"
+    );
 }
 
 
@@ -760,7 +1015,9 @@ async function saveCustomProduct() {
         ?.value
     );
 
-  if (!rawName) {
+  if (
+    !rawName
+  ) {
     showStatus(
       "Enter a product name first."
     );
@@ -774,18 +1031,24 @@ async function saveCustomProduct() {
     "each";
 
   const id =
-    `custom-${slugify(rawName)}`;
+    `custom-${slugify(
+      rawName
+    )}`;
 
   const duplicate =
     catalog.find(
       product =>
-        product.id === id ||
+        product.id ===
+          id ||
         product.label
           .toLowerCase() ===
-        rawName.toLowerCase()
+        rawName
+          .toLowerCase()
     );
 
-  if (duplicate) {
+  if (
+    duplicate
+  ) {
     productSelect.value =
       duplicate.id;
 
@@ -804,7 +1067,9 @@ async function saveCustomProduct() {
     id,
 
     label:
-      titleCase(rawName),
+      titleCase(
+        rawName
+      ),
 
     queryName:
       rawName,
@@ -818,7 +1083,9 @@ async function saveCustomProduct() {
       unit,
 
     allowedUnits:
-      [unit],
+      [
+        unit
+      ],
 
     custom:
       true
@@ -870,7 +1137,9 @@ async function addSelectedItem() {
   const product =
     currentSelectedProduct();
 
-  if (!product) {
+  if (
+    !product
+  ) {
     showStatus(
       "Select a product first."
     );
@@ -880,13 +1149,16 @@ async function addSelectedItem() {
 
   const quantity =
     Number(
-      quantitySelect?.value ||
+      quantitySelect
+        ?.value ||
       1
     );
 
   const unit =
-    unitSelect?.value ||
-    product.defaultUnit ||
+    unitSelect
+      ?.value ||
+    product
+      .defaultUnit ||
     "each";
 
   const existing =
@@ -899,7 +1171,9 @@ async function addSelectedItem() {
         !item.checked
     );
 
-  if (existing) {
+  if (
+    existing
+  ) {
     existing.quantity =
       Number(
         existing.quantity ||
@@ -965,10 +1239,13 @@ async function addSelectedItem() {
  * =====================================================
  */
 
-function inferPricingStatus(data) {
+function inferPricingStatus(
+  data
+) {
   const retailerNames =
     Array.isArray(
-      data?.results
+      data
+        ?.results
     )
       ? [
           ...new Set(
@@ -977,16 +1254,21 @@ function inferPricingStatus(data) {
                 result =>
                   result.retailer
               )
-              .filter(Boolean)
+              .filter(
+                Boolean
+              )
           )
         ]
+
       : [];
 
   if (
-    retailerNames.length >= 2
+    retailerNames.length >=
+    2
   ) {
     return {
-      status: "available",
+      status:
+        "available",
 
       label:
         "Pricing available",
@@ -997,10 +1279,12 @@ function inferPricingStatus(data) {
   }
 
   if (
-    retailerNames.length === 1
+    retailerNames.length ===
+    1
   ) {
     return {
-      status: "partial",
+      status:
+        "partial",
 
       label:
         "Partial pricing",
@@ -1011,12 +1295,14 @@ function inferPricingStatus(data) {
   }
 
   return {
-    status: "research",
+    status:
+      "research",
 
     label:
       "Research needed",
 
-    retailers: []
+    retailers:
+      []
   };
 }
 
@@ -1026,7 +1312,9 @@ async function checkProductPricing(
   quantity = 1,
   unit = null
 ) {
-  if (!product) {
+  if (
+    !product
+  ) {
     return null;
   }
 
@@ -1054,7 +1342,9 @@ async function checkProductPricing(
       await response.json();
 
     const inferred =
-      inferPricingStatus(data);
+      inferPricingStatus(
+        data
+      );
 
     pricingStatus[
       product.id
@@ -1072,7 +1362,9 @@ async function checkProductPricing(
 
     return inferred;
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "Pricing check failed:",
       error
@@ -1087,7 +1379,8 @@ async function checkProductPricing(
       label:
         "Research needed",
 
-      retailers: [],
+      retailers:
+        [],
 
       checkedAt:
         new Date()
@@ -1134,7 +1427,9 @@ async function refreshCustomProductResearch() {
         }
       );
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       throw new Error(
         `Evidence refresh returned ${response.status}.`
       );
@@ -1143,7 +1438,10 @@ async function refreshCustomProductResearch() {
     const data =
       await response.json();
 
-    if (!data?.ok) {
+    if (
+      !data
+        ?.ok
+    ) {
       return null;
     }
 
@@ -1153,7 +1451,9 @@ async function refreshCustomProductResearch() {
 
     return data;
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "Custom evidence refresh failed:",
       error
@@ -1166,7 +1466,7 @@ async function refreshCustomProductResearch() {
 
 /*
  * =====================================================
- * USE REFRESH PLAN
+ * REFRESH PLAN STATUS
  * =====================================================
  */
 
@@ -1175,10 +1475,17 @@ function updatePricingFromRefreshPlan(
 ) {
   const retailerPlans =
     [
-      data?.retailers?.sprouts,
-      data?.retailers?.earthFare
+      data
+        ?.retailers
+        ?.sprouts,
+
+      data
+        ?.retailers
+        ?.earthFare
     ]
-      .filter(Boolean);
+      .filter(
+        Boolean
+      );
 
   for (
     const product of
@@ -1192,15 +1499,18 @@ function updatePricingFromRefreshPlan(
       retailerPlans
     ) {
       const target =
-        plan.targets?.find(
-          item =>
-            item.id ===
-            normalizeCustomRefreshId(
-              product
-            )
-        );
+        plan.targets
+          ?.find(
+            item =>
+              item.id ===
+              normalizeCustomRefreshId(
+                product
+              )
+          );
 
-      if (target) {
+      if (
+        target
+      ) {
         researchRetailers.push(
           plan.retailer
         );
@@ -1229,7 +1539,8 @@ function updatePricingFromRefreshPlan(
         label:
           "Research needed",
 
-        retailers: [],
+        retailers:
+          [],
 
         researchRetailers,
 
@@ -1248,7 +1559,7 @@ function updatePricingFromRefreshPlan(
 
 /*
  * =====================================================
- * CUSTOM ID NORMALIZATION
+ * CUSTOM PRODUCT ID NORMALIZATION
  * =====================================================
  */
 
@@ -1273,60 +1584,100 @@ const MASS_OR_UNCHANGED_WORDS =
 
 
 const IRREGULAR_PLURALS = {
-  potato: "potatoes",
-  tomato: "tomatoes",
-  berry: "berries",
-  cherry: "cherries",
-  strawberry: "strawberries",
-  blueberry: "blueberries",
-  raspberry: "raspberries",
-  cranberry: "cranberries"
+  potato:
+    "potatoes",
+
+  tomato:
+    "tomatoes",
+
+  berry:
+    "berries",
+
+  cherry:
+    "cherries",
+
+  strawberry:
+    "strawberries",
+
+  blueberry:
+    "blueberries",
+
+  raspberry:
+    "raspberries",
+
+  cranberry:
+    "cranberries"
 };
 
 
-function pluralizeCustomWord(word) {
+function pluralizeCustomWord(
+  word
+) {
   const value =
-    cleanText(word)
+    cleanText(
+      word
+    )
       .toLowerCase();
 
-  if (!value) {
+  if (
+    !value
+  ) {
     return value;
   }
 
   if (
     MASS_OR_UNCHANGED_WORDS
-      .has(value)
+      .has(
+        value
+      )
   ) {
     return value;
   }
 
   if (
-    IRREGULAR_PLURALS[value]
+    IRREGULAR_PLURALS[
+      value
+    ]
   ) {
     return (
-      IRREGULAR_PLURALS[value]
+      IRREGULAR_PLURALS[
+        value
+      ]
     );
   }
 
   if (
-    value.endsWith("ies") ||
-    value.endsWith("oes")
+    value.endsWith(
+      "ies"
+    ) ||
+    value.endsWith(
+      "oes"
+    )
   ) {
     return value;
   }
 
   if (
-    value.endsWith("s") &&
-    !value.endsWith("ss")
+    value.endsWith(
+      "s"
+    ) &&
+    !value.endsWith(
+      "ss"
+    )
   ) {
     return value;
   }
 
   if (
-    /[^aeiou]y$/.test(value)
+    /[^aeiou]y$/.test(
+      value
+    )
   ) {
     return (
-      value.slice(0, -1) +
+      value.slice(
+        0,
+        -1
+      ) +
       "ies"
     );
   }
@@ -1358,12 +1709,20 @@ function normalizeCustomRefreshId(
     "";
 
   const words =
-    cleanText(rawName)
+    cleanText(
+      rawName
+    )
       .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean);
+      .split(
+        /\s+/
+      )
+      .filter(
+        Boolean
+      );
 
-  if (!words.length) {
+  if (
+    !words.length
+  ) {
     return product.id;
   }
 
@@ -1378,7 +1737,9 @@ function normalizeCustomRefreshId(
 
   return (
     `custom-${slugify(
-      words.join(" ")
+      words.join(
+        " "
+      )
     )}`
   );
 }
@@ -1398,7 +1759,9 @@ function pricingLabelForProduct(
       productId
     ];
 
-  if (!pricing) {
+  if (
+    !pricing
+  ) {
     return (
       "Pricing not checked"
     );
@@ -1435,13 +1798,18 @@ function pricingLabelForProduct(
 
 
 function renderWeeklyList() {
-  if (!groceryList) {
+  if (
+    !groceryList
+  ) {
     return;
   }
 
-  groceryList.innerHTML = "";
+  groceryList.innerHTML =
+    "";
 
-  if (!weeklyList.length) {
+  if (
+    !weeklyList.length
+  ) {
     const empty =
       document.createElement(
         "p"
@@ -1469,9 +1837,13 @@ function renderWeeklyList() {
     const fragment =
       groceryItemTemplate
         ?.content
-        ?.cloneNode(true);
+        ?.cloneNode(
+          true
+        );
 
-    if (!fragment) {
+    if (
+      !fragment
+    ) {
       continue;
     }
 
@@ -1500,14 +1872,20 @@ function renderWeeklyList() {
         ".grocery-remove"
       );
 
-    if (productName) {
+    if (
+      productName
+    ) {
       productName.textContent =
         item.label;
     }
 
-    if (checkbox) {
+    if (
+      checkbox
+    ) {
       checkbox.checked =
-        Boolean(item.checked);
+        Boolean(
+          item.checked
+        );
 
       checkbox.addEventListener(
         "change",
@@ -1531,7 +1909,9 @@ function renderWeeklyList() {
       );
     }
 
-    if (meta) {
+    if (
+      meta
+    ) {
       meta.textContent =
         [
           `${item.quantity} ${unitLabel(
@@ -1542,11 +1922,17 @@ function renderWeeklyList() {
             item.productId
           )
         ]
-          .filter(Boolean)
-          .join(" · ");
+          .filter(
+            Boolean
+          )
+          .join(
+            " · "
+          );
     }
 
-    if (remove) {
+    if (
+      remove
+    ) {
       remove.addEventListener(
         "click",
         () => {
@@ -1572,11 +1958,14 @@ function renderWeeklyList() {
  * =====================================================
  */
 
-function removeWeeklyItem(itemId) {
+function removeWeeklyItem(
+  itemId
+) {
   weeklyList =
     weeklyList.filter(
       item =>
-        item.id !== itemId
+        item.id !==
+        itemId
     );
 
   saveWeeklyList();
@@ -1590,7 +1979,9 @@ function resetWeeklyList() {
     weeklyList.map(
       item => ({
         ...item,
-        checked: false
+
+        checked:
+          false
       })
     );
 
@@ -1611,7 +2002,9 @@ function resetWeeklyList() {
  */
 
 function updateRemainingCount() {
-  if (!remainingItemCount) {
+  if (
+    !remainingItemCount
+  ) {
     return;
   }
 
@@ -1637,14 +2030,18 @@ function updateRemainingCount() {
  */
 
 function hideStatus() {
-  if (statusSection) {
+  if (
+    statusSection
+  ) {
     statusSection.hidden =
       true;
   }
 }
 
 
-function showStatus(message) {
+function showStatus(
+  message
+) {
   if (
     !statusSection ||
     !status
@@ -1662,7 +2059,7 @@ function showStatus(message) {
 
 /*
  * =====================================================
- * COMPARE
+ * COMPARE REQUEST
  * =====================================================
  */
 
@@ -1676,7 +2073,9 @@ function buildCompareQuery(
 }
 
 
-async function compareItem(item) {
+async function compareItem(
+  item
+) {
   const product =
     getProductById(
       item.productId
@@ -1716,7 +2115,9 @@ async function compareItem(item) {
       }
     );
 
-  if (!response.ok) {
+  if (
+    !response.ok
+  ) {
     throw new Error(
       `Compare request failed for ${item.label}.`
     );
@@ -1747,6 +2148,7 @@ async function compareItem(item) {
                 result.cost
               )
           )
+
       : [];
 
   const inferred =
@@ -1767,8 +2169,11 @@ async function compareItem(item) {
 
   return {
     item,
+
     product,
+
     data,
+
     results:
       normalizedResults
   };
@@ -1777,14 +2182,253 @@ async function compareItem(item) {
 
 /*
  * =====================================================
+ * PURCHASE PLAN HELPERS
+ * =====================================================
+ */
+
+function getPurchasePlan(
+  result
+) {
+  if (
+    result
+      ?.purchasePlan
+  ) {
+    return result.purchasePlan;
+  }
+
+  if (
+    result
+      ?.normalized
+  ) {
+    const requested =
+      Number(
+        result.normalized
+          .requestedQty ??
+        result.normalized
+          .requestedQuantity
+      );
+
+    const supplied =
+      Number(
+        result.normalized
+          .suppliedQty ??
+        result.normalized
+          .suppliedQuantity
+      );
+
+    if (
+      Number.isFinite(
+        requested
+      ) &&
+      Number.isFinite(
+        supplied
+      )
+    ) {
+      return {
+        requestedQuantity:
+          requested,
+
+        suppliedQuantity:
+          supplied
+      };
+    }
+  }
+
+  return null;
+}
+
+
+/*
+ * =====================================================
+ * OVERBUY CALCULATION
+ * =====================================================
+ */
+
+function calculateOverbuyMetrics(
+  result
+) {
+  const plan =
+    getPurchasePlan(
+      result
+    );
+
+  if (
+    !plan
+  ) {
+    return {
+      requested:
+        null,
+
+      supplied:
+        null,
+
+      excess:
+        0,
+
+      ratio:
+        0,
+
+      penalty:
+        0
+    };
+  }
+
+  const requested =
+    Number(
+      plan.requestedQuantity ??
+      plan.requestedQty
+    );
+
+  const supplied =
+    Number(
+      plan.suppliedQuantity ??
+      plan.suppliedQty
+    );
+
+  if (
+    !Number.isFinite(
+      requested
+    ) ||
+    requested <= 0 ||
+    !Number.isFinite(
+      supplied
+    ) ||
+    supplied <= 0
+  ) {
+    return {
+      requested:
+        null,
+
+      supplied:
+        null,
+
+      excess:
+        0,
+
+      ratio:
+        0,
+
+      penalty:
+        0
+    };
+  }
+
+  const excess =
+    Math.max(
+      0,
+      supplied -
+      requested
+    );
+
+  const ratio =
+    excess /
+    requested;
+
+  const cost =
+    Number(
+      result.cost ??
+      result.estimatedCost ??
+      0
+    );
+
+  let penalty =
+    Number.isFinite(
+      cost
+    )
+      ? cost *
+        ratio *
+        OVERBUY_PENALTY_RATE
+
+      : 0;
+
+  if (
+    ratio >
+    HEAVY_OVERBUY_THRESHOLD
+  ) {
+    penalty +=
+      HEAVY_OVERBUY_PENALTY;
+  }
+
+  return {
+    requested:
+      round(
+        requested,
+        3
+      ),
+
+    supplied:
+      round(
+        supplied,
+        3
+      ),
+
+    excess:
+      round(
+        excess,
+        3
+      ),
+
+    ratio:
+      round(
+        ratio,
+        4
+      ),
+
+    penalty:
+      round(
+        penalty,
+        2
+      ) || 0
+  };
+}
+
+
+/*
+ * =====================================================
+ * BEST-BALANCE OPTION SCORE
+ * =====================================================
+ */
+
+function balanceOptionScore(
+  result
+) {
+  const cost =
+    Number(
+      result.cost
+    );
+
+  const overbuy =
+    calculateOverbuyMetrics(
+      result
+    );
+
+  return {
+    rawCost:
+      cost,
+
+    overbuy,
+
+    adjustedCost:
+      cost +
+      overbuy.penalty
+  };
+}
+
+
+/*
+ * =====================================================
  * LOWEST COST
+ *
+ * Intentionally ignores convenience penalties.
+ * This is the literal cheapest valid retailer combination.
  * =====================================================
  */
 
 function buildLowestCostPlan(
   comparisons
 ) {
-  const selections = [];
+  const selections =
+    [];
 
   for (
     const comparison of
@@ -1794,12 +2438,17 @@ function buildLowestCostPlan(
       comparison.results
         .slice()
         .sort(
-          (a, b) =>
+          (
+            a,
+            b
+          ) =>
             a.cost -
             b.cost
         )[0];
 
-    if (!cheapest) {
+    if (
+      !cheapest
+    ) {
       continue;
     }
 
@@ -1814,7 +2463,12 @@ function buildLowestCostPlan(
         cheapest.cost,
 
       result:
-        cheapest
+        cheapest,
+
+      overbuy:
+        calculateOverbuyMetrics(
+          cheapest
+        )
     });
   }
 
@@ -1855,34 +2509,45 @@ function buildLowestCostPlan(
 
 /*
  * =====================================================
- * COMBINATIONS
+ * STORE SUBSET COMBINATIONS
  * =====================================================
  */
 
-function combinations(array) {
-  const result = [];
+function combinations(
+  array
+) {
+  const result =
+    [];
 
   const total =
-    1 << array.length;
+    1 <<
+    array.length;
 
   for (
     let mask = 1;
     mask < total;
     mask++
   ) {
-    const subset = [];
+    const subset =
+      [];
 
     for (
       let index = 0;
-      index < array.length;
+      index <
+      array.length;
       index++
     ) {
       if (
         mask &
-        (1 << index)
+        (
+          1 <<
+          index
+        )
       ) {
         subset.push(
-          array[index]
+          array[
+            index
+          ]
         );
       }
     }
@@ -1899,6 +2564,19 @@ function combinations(array) {
 /*
  * =====================================================
  * BEST BALANCE
+ *
+ * SCORE =
+ *
+ * grocery purchase total
+ * + extra store penalty
+ * + overbuy penalty
+ *
+ * Important:
+ * - Every item must be covered.
+ * - Inside each allowed store subset, the product option
+ *   with the best adjusted cost is selected.
+ * - The displayed total remains the actual checkout total.
+ * - Penalties affect ranking only.
  * =====================================================
  */
 
@@ -1918,20 +2596,26 @@ function buildBestBalancePlan(
       )
     ];
 
-  if (!retailers.length) {
+  if (
+    !retailers.length
+  ) {
     return null;
   }
 
   const subsets =
-    combinations(retailers);
+    combinations(
+      retailers
+    );
 
-  let best = null;
+  let best =
+    null;
 
   for (
     const subset of
     subsets
   ) {
-    const selections = [];
+    const selections =
+      [];
 
     let incomplete =
       false;
@@ -1948,37 +2632,75 @@ function buildBestBalancePlan(
                 result.retailer
               )
           )
+          .map(
+            result => {
+              const scoring =
+                balanceOptionScore(
+                  result
+                );
+
+              return {
+                result,
+                scoring
+              };
+            }
+          )
           .sort(
-            (a, b) =>
-              a.cost -
-              b.cost
+            (
+              a,
+              b
+            ) =>
+              a.scoring
+                .adjustedCost -
+              b.scoring
+                .adjustedCost
           );
 
-      if (!options.length) {
+      if (
+        !options.length
+      ) {
         incomplete =
           true;
 
         break;
       }
 
+      const winner =
+        options[0];
+
       selections.push({
         item:
           comparison.item,
 
         retailer:
-          options[0]
+          winner
+            .result
             .retailer,
 
         cost:
-          options[0]
+          winner
+            .result
             .cost,
 
         result:
-          options[0]
+          winner
+            .result,
+
+        overbuy:
+          winner
+            .scoring
+            .overbuy,
+
+        adjustedCost:
+          winner
+            .scoring
+            .adjustedCost
       });
     }
 
-    if (incomplete) {
+    if (
+      incomplete
+    ) {
       continue;
     }
 
@@ -2003,38 +2725,75 @@ function buildBestBalancePlan(
         )
       ];
 
-    const penalty =
+    const stopPenalty =
       Math.max(
         0,
-        usedStores.length - 1
+        usedStores.length -
+        1
       ) *
       STOP_PENALTY;
 
+    const overbuyPenalty =
+      selections.reduce(
+        (
+          sum,
+          selection
+        ) =>
+          sum +
+          (
+            selection.overbuy
+              ?.penalty ||
+            0
+          ),
+        0
+      );
+
     const score =
       groceryTotal +
-      penalty;
+      stopPenalty +
+      overbuyPenalty;
+
+    const candidate = {
+      label:
+        "Best Balance",
+
+      title:
+        "Lower cost with fewer stops",
+
+      total:
+        groceryTotal,
+
+      score:
+        round(
+          score,
+          2
+        ),
+
+      stopPenalty:
+        round(
+          stopPenalty,
+          2
+        ),
+
+      overbuyPenalty:
+        round(
+          overbuyPenalty,
+          2
+        ),
+
+      selections,
+
+      stores:
+        usedStores
+    };
 
     if (
       !best ||
-      score < best.score
+      candidate.score <
+        best.score
     ) {
-      best = {
-        label:
-          "Best Balance",
-
-        title:
-          "Lower cost with fewer stops",
-
-        total:
-          groceryTotal,
-
-        score,
-
-        selections,
-
-        stores:
-          usedStores
-      };
+      best =
+        candidate;
     }
   }
 
@@ -2045,6 +2804,10 @@ function buildBestBalancePlan(
 /*
  * =====================================================
  * ONE STORE
+ *
+ * Priorities:
+ * 1. Cover the greatest number of requested items.
+ * 2. Among equal-coverage stores, choose lowest total.
  * =====================================================
  */
 
@@ -2074,7 +2837,9 @@ function buildOneStorePlan(
       }
 
       retailerMap
-        .get(result.retailer)
+        .get(
+          result.retailer
+        )
         .push({
           comparison,
           result
@@ -2082,24 +2847,29 @@ function buildOneStorePlan(
     }
   }
 
-  let best = null;
+  let best =
+    null;
 
   for (
     const [
       retailer,
       entries
-    ] of retailerMap
+    ] of
+    retailerMap
   ) {
     const coveredItems =
       new Set(
         entries.map(
           entry =>
-            entry.comparison
-              .item.id
+            entry
+              .comparison
+              .item
+              .id
         )
       );
 
-    const selections = [];
+    const selections =
+      [];
 
     for (
       const comparison of
@@ -2113,12 +2883,17 @@ function buildOneStorePlan(
               retailer
           )
           .sort(
-            (a, b) =>
+            (
+              a,
+              b
+            ) =>
               a.cost -
               b.cost
           )[0];
 
-      if (option) {
+      if (
+        option
+      ) {
         selections.push({
           item:
             comparison.item,
@@ -2129,7 +2904,12 @@ function buildOneStorePlan(
             option.cost,
 
           result:
-            option
+            option,
+
+          overbuy:
+            calculateOverbuyMetrics(
+              option
+            )
         });
       }
     }
@@ -2157,10 +2937,15 @@ function buildOneStorePlan(
       coverage:
         coveredItems.size,
 
+      requestedCoverage:
+        comparisons.length,
+
       selections,
 
       stores:
-        [retailer]
+        [
+          retailer
+        ]
     };
 
     if (
@@ -2194,11 +2979,17 @@ function getPrimaryPackage(
 ) {
   if (
     Array.isArray(
-      result?.packages
+      result
+        ?.packages
     ) &&
-    result.packages.length
+    result.packages
+      .length
   ) {
-    return result.packages[0];
+    return (
+      result.packages[
+        0
+      ]
+    );
   }
 
   return null;
@@ -2213,23 +3004,35 @@ function packageDetailText(
       result
     );
 
-  const parts = [];
+  const parts =
+    [];
 
   const packagesNeeded =
     Number(
+      result
+        ?.purchasePlan
+        ?.packagesNeeded ??
       packageInfo
-        ?.packagesNeeded ||
-      result?.purchasePlan
-        ?.packagesNeeded ||
-      result?.packages?.length ||
-      0
+        ?.packagesNeeded ??
+      (
+        Array.isArray(
+          result
+            ?.packages
+        )
+          ? result
+              .packages
+              .length
+
+          : 0
+      )
     );
 
   if (
     Number.isFinite(
       packagesNeeded
     ) &&
-    packagesNeeded > 0
+    packagesNeeded >
+    0
   ) {
     parts.push(
       `${packagesNeeded} ${
@@ -2241,57 +3044,146 @@ function packageDetailText(
   }
 
   if (
-    packageInfo?.size
+    packageInfo
+      ?.size
   ) {
     parts.push(
       packageInfo.size
     );
+
   } else if (
-    packageInfo?.packageQty &&
-    packageInfo?.packageUnit
+    packageInfo
+      ?.packageQty &&
+    packageInfo
+      ?.packageUnit
   ) {
     parts.push(
       `${packageInfo.packageQty} ${unitLabel(
         packageInfo.packageUnit
       )}`
     );
+
+  } else if (
+    result
+      ?.package
+      ?.quantity &&
+    result
+      ?.package
+      ?.unit
+  ) {
+    parts.push(
+      `${result.package.quantity} ${unitLabel(
+        result.package.unit
+      )}`
+    );
   }
+
+  const purchasePlan =
+    getPurchasePlan(
+      result
+    );
 
   const supplied =
     Number(
-      result?.normalized
+      purchasePlan
+        ?.suppliedQuantity ??
+      purchasePlan
         ?.suppliedQty
     );
 
+  const requested =
+    Number(
+      purchasePlan
+        ?.requestedQuantity ??
+      purchasePlan
+        ?.requestedQty
+    );
+
   const suppliedUnit =
-    result?.normalized?.unit;
+    purchasePlan
+      ?.normalizedUnit ||
+    result
+      ?.normalized
+      ?.unit ||
+    result
+      ?.package
+      ?.normalizedUnit;
 
   if (
-    Number.isFinite(supplied) &&
+    Number.isFinite(
+      supplied
+    ) &&
     suppliedUnit
   ) {
     parts.push(
-      `${supplied} ${unitLabel(
+      `${round(
+        supplied,
+        2
+      )} ${unitLabel(
         suppliedUnit
       )} supplied`
     );
   }
 
-  return parts.join(" · ");
+  if (
+    Number.isFinite(
+      supplied
+    ) &&
+    Number.isFinite(
+      requested
+    ) &&
+    requested > 0 &&
+    supplied >
+      requested
+  ) {
+    const percent =
+      Math.round(
+        (
+          (
+            supplied -
+            requested
+          ) /
+          requested
+        ) *
+        100
+      );
+
+    if (
+      percent >= 10
+    ) {
+      parts.push(
+        `${percent}% over requested amount`
+      );
+    }
+  }
+
+  return parts.join(
+    " · "
+  );
 }
 
+
+/*
+ * =====================================================
+ * EVIDENCE DETAIL
+ * =====================================================
+ */
 
 function evidenceDetailText(
   result
 ) {
-  const parts = [];
+  const parts =
+    [];
 
   const freshness =
     prettyFreshness(
-      result?.freshness
+      result
+        ?.freshness
     );
 
-  if (freshness) {
+  if (
+    freshness
+  ) {
     parts.push(
       freshness
     );
@@ -2300,12 +3192,15 @@ function evidenceDetailText(
   if (
     Number.isFinite(
       Number(
-        result?.ageDays
+        result
+          ?.ageDays
       )
     )
   ) {
     const days =
-      Number(result.ageDays);
+      Number(
+        result.ageDays
+      );
 
     parts.push(
       days === 0
@@ -2320,25 +3215,102 @@ function evidenceDetailText(
 
   const confidence =
     confidenceLabel(
-      result?.confidenceScore
+      result
+        ?.confidenceScore
     );
 
-  if (confidence) {
+  if (
+    confidence
+  ) {
     parts.push(
       confidence
     );
   }
 
   if (
-    result?.dataMode ===
-    "live"
+    result
+      ?.dataMode ===
+      "live"
   ) {
     parts.unshift(
       "Live retailer data"
     );
   }
 
-  return parts.join(" · ");
+  return parts.join(
+    " · "
+  );
+}
+
+
+/*
+ * =====================================================
+ * PLAN META
+ * =====================================================
+ */
+
+function planMetaText(
+  plan
+) {
+  const parts = [
+    `${plan.selections.length} ${
+      plan.selections.length ===
+      1
+        ? "item"
+        : "items"
+    }`,
+
+    `${plan.stores.length} ${
+      plan.stores.length ===
+      1
+        ? "store"
+        : "stores"
+    }`
+  ];
+
+  if (
+    plan.label ===
+      "Best Balance"
+  ) {
+    if (
+      plan.stopPenalty >
+      0
+    ) {
+      parts.push(
+        "store convenience considered"
+      );
+    }
+
+    if (
+      plan.overbuyPenalty >
+      0
+    ) {
+      parts.push(
+        "package overbuy considered"
+      );
+    }
+  }
+
+  if (
+    plan.label ===
+      "One Store" &&
+    Number.isFinite(
+      plan.coverage
+    ) &&
+    Number.isFinite(
+      plan.requestedCoverage
+    ) &&
+    plan.coverage <
+      plan.requestedCoverage
+  ) {
+    parts.push(
+      `${plan.coverage}/${plan.requestedCoverage} items covered`
+    );
+  }
+
+  return parts.join(
+    " · "
+  );
 }
 
 
@@ -2348,7 +3320,9 @@ function evidenceDetailText(
  * =====================================================
  */
 
-function renderPlan(plan) {
+function renderPlan(
+  plan
+) {
   if (
     !plan ||
     !optimizationCardTemplate
@@ -2359,7 +3333,9 @@ function renderPlan(plan) {
   const fragment =
     optimizationCardTemplate
       .content
-      .cloneNode(true);
+      .cloneNode(
+        true
+      );
 
   const label =
     fragment.querySelector(
@@ -2386,35 +3362,41 @@ function renderPlan(plan) {
       ".optimization-stores"
     );
 
-  if (label) {
+  if (
+    label
+  ) {
     label.textContent =
       plan.label;
   }
 
-  if (title) {
+  if (
+    title
+  ) {
     title.textContent =
       plan.title;
   }
 
-  if (total) {
+  if (
+    total
+  ) {
     total.textContent =
-      money(plan.total);
+      money(
+        plan.total
+      );
   }
 
-  if (meta) {
+  if (
+    meta
+  ) {
     meta.textContent =
-      `${plan.selections.length} ${
-        plan.selections.length === 1
-          ? "item"
-          : "items"
-      } · ${plan.stores.length} ${
-        plan.stores.length === 1
-          ? "store"
-          : "stores"
-      }`;
+      planMetaText(
+        plan
+      );
   }
 
-  if (stores) {
+  if (
+    stores
+  ) {
     for (
       const selection of
       plan.selections
@@ -2427,8 +3409,10 @@ function renderPlan(plan) {
       row.className =
         "optimization-store-row";
 
+
       /*
-       * Product / package information
+       * LEFT:
+       * Product + package detail
        */
 
       const itemWrap =
@@ -2448,7 +3432,8 @@ function renderPlan(plan) {
         "optimization-store-item";
 
       item.textContent =
-        selection.item.label;
+        selection.item
+          .label;
 
       itemWrap.appendChild(
         item
@@ -2459,7 +3444,9 @@ function renderPlan(plan) {
           selection.result
         );
 
-      if (packageDetail) {
+      if (
+        packageDetail
+      ) {
         const detail =
           document.createElement(
             "div"
@@ -2485,6 +3472,17 @@ function renderPlan(plan) {
         );
       }
 
+
+      /*
+       * MIDDLE:
+       * Store + evidence detail
+       */
+
+      const retailerWrap =
+        document.createElement(
+          "div"
+        );
+
       const retailer =
         document.createElement(
           "div"
@@ -2496,12 +3494,18 @@ function renderPlan(plan) {
       retailer.textContent =
         selection.retailer;
 
+      retailerWrap.appendChild(
+        retailer
+      );
+
       const evidence =
         evidenceDetailText(
           selection.result
         );
 
-      if (evidence) {
+      if (
+        evidence
+      ) {
         const evidenceText =
           document.createElement(
             "div"
@@ -2511,7 +3515,7 @@ function renderPlan(plan) {
           "3px";
 
         evidenceText.style.maxWidth =
-          "160px";
+          "170px";
 
         evidenceText.style.fontSize =
           "0.68rem";
@@ -2525,10 +3529,16 @@ function renderPlan(plan) {
         evidenceText.textContent =
           evidence;
 
-        retailer.appendChild(
+        retailerWrap.appendChild(
           evidenceText
         );
       }
+
+
+      /*
+       * RIGHT:
+       * Actual checkout cost
+       */
 
       const price =
         document.createElement(
@@ -2545,7 +3555,7 @@ function renderPlan(plan) {
 
       row.append(
         itemWrap,
-        retailer,
+        retailerWrap,
         price
       );
 
@@ -2574,7 +3584,9 @@ async function compareWeeklyList() {
         !item.checked
     );
 
-  if (!items.length) {
+  if (
+    !items.length
+  ) {
     showStatus(
       "There are no unchecked items to compare."
     );
@@ -2598,7 +3610,9 @@ async function compareWeeklyList() {
 
     const comparisons =
       await Promise.all(
-        items.map(compareItem)
+        items.map(
+          compareItem
+        )
       );
 
     savePricingStatus();
@@ -2619,9 +3633,12 @@ async function compareWeeklyList() {
             .length
       );
 
-    results.innerHTML = "";
+    results.innerHTML =
+      "";
 
-    if (!withResults.length) {
+    if (
+      !withResults.length
+    ) {
       resultsSection.hidden =
         true;
 
@@ -2647,11 +3664,17 @@ async function compareWeeklyList() {
         withResults
       );
 
-    renderPlan(lowest);
+    renderPlan(
+      lowest
+    );
 
-    renderPlan(balanced);
+    renderPlan(
+      balanced
+    );
 
-    renderPlan(oneStore);
+    renderPlan(
+      oneStore
+    );
 
     resultsSection.hidden =
       false;
@@ -2673,8 +3696,12 @@ async function compareWeeklyList() {
       );
     }
 
-  } catch (error) {
-    console.error(error);
+  } catch (
+    error
+  ) {
+    console.error(
+      error
+    );
 
     showStatus(
       "Something went wrong while comparing prices. Please try again."
@@ -2747,7 +3774,8 @@ customProductName
     "keydown",
     event => {
       if (
-        event.key === "Enter"
+        event.key ===
+        "Enter"
       ) {
         event.preventDefault();
 
@@ -2766,7 +3794,9 @@ customProductName
 async function initialize() {
   hideStatus();
 
-  if (resultsSection) {
+  if (
+    resultsSection
+  ) {
     resultsSection.hidden =
       true;
   }
