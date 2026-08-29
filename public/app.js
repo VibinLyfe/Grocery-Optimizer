@@ -1,145 +1,50 @@
 const STORAGE_KEY = "toomey-grocery-weekly-list-v1";
 const STOP_PENALTY = 5;
 
+let PRODUCTS = {};
+let PRODUCT_LIST = [];
+
 
 /*
  * =====================================================
- * PRODUCT CATALOG
- *
- * Front-end only.
- * These map the friendly dropdown selections to the
- * request language the existing backend already accepts.
+ * UNIT LABELS
  * =====================================================
  */
 
-const PRODUCTS = {
-  "ground-beef-organic-grassfed-85-15": {
-    label:
-      "Organic grass-fed 85/15 ground beef",
-
-    queryName:
-      "organic grass-fed 85/15 ground beef",
-
-    defaultUnit:
-      "lb",
-
-    allowedUnits: [
-      "lb",
-      "oz"
-    ]
-  },
-
-  "organic-broccoli": {
-    label:
-      "Organic broccoli",
-
-    queryName:
-      "organic broccoli",
-
-    defaultUnit:
-      "each",
-
-    allowedUnits: [
-      "each"
-    ]
-  },
-
-  "organic-cucumber": {
-    label:
-      "Organic cucumber",
-
-    queryName:
-      "organic cucumber",
-
-    defaultUnit:
-      "each",
-
-    allowedUnits: [
-      "each"
-    ]
-  },
-
-  "organic-baby-carrots": {
-    label:
-      "Organic baby carrots",
-
-    queryName:
-      "organic baby carrots",
-
-    defaultUnit:
-      "package",
-
-    allowedUnits: [
-      "package",
-      "oz",
-      "lb"
-    ],
-
-    /*
-     * For the current prototype, one package of
-     * organic baby carrots is treated as 16 oz
-     * when talking to the existing backend.
-     */
-    packageEquivalent: {
-      quantity: 16,
-      unit: "oz"
-    }
-  },
-
-  "organic-mango": {
-    label:
-      "Organic mango",
-
-    queryName:
-      "organic mango",
-
-    defaultUnit:
-      "each",
-
-    allowedUnits: [
-      "each"
-    ]
-  }
-};
-
-
 const UNIT_LABELS = {
-  each:
-    "each",
-
-  package:
-    "package",
-
-  lb:
-    "lb",
-
-  oz:
-    "oz",
-
-  g:
-    "g",
-
-  kg:
-    "kg",
-
-  "fl oz":
-    "fl oz",
-
-  pint:
-    "pint",
-
-  quart:
-    "quart",
-
-  gallon:
-    "gallon",
-
-  ml:
-    "ml",
-
-  liter:
-    "liter"
+  each: "each",
+  package: "package",
+  lb: "lb",
+  oz: "oz",
+  g: "g",
+  kg: "kg",
+  "fl oz": "fl oz",
+  pint: "pint",
+  quart: "quart",
+  gallon: "gallon",
+  ml: "ml",
+  liter: "liter",
+  dozen: "dozen",
+  can: "can",
+  jar: "jar",
+  bottle: "bottle",
+  loaf: "loaf",
+  bag: "bag",
+  roll: "roll"
 };
+
+
+const COUNT_UNITS = new Set([
+  "each",
+  "package",
+  "dozen",
+  "can",
+  "jar",
+  "bottle",
+  "loaf",
+  "bag",
+  "roll"
+]);
 
 
 const COUNT_QUANTITIES = [
@@ -156,7 +61,9 @@ const COUNT_QUANTITIES = [
 
 
 const MEASURE_QUANTITIES = [
+  0.25,
   0.5,
+  0.75,
   1,
   1.5,
   2,
@@ -178,74 +85,46 @@ const MEASURE_QUANTITIES = [
  */
 
 const groceryListEl =
-  document.querySelector(
-    "#groceryList"
-  );
+  document.querySelector("#groceryList");
 
 const groceryItemTemplate =
-  document.querySelector(
-    "#groceryItemTemplate"
-  );
+  document.querySelector("#groceryItemTemplate");
 
 const productSelect =
-  document.querySelector(
-    "#productSelect"
-  );
+  document.querySelector("#productSelect");
 
 const quantitySelect =
-  document.querySelector(
-    "#quantitySelect"
-  );
+  document.querySelector("#quantitySelect");
 
 const unitSelect =
-  document.querySelector(
-    "#unitSelect"
-  );
+  document.querySelector("#unitSelect");
 
 const addItemButton =
-  document.querySelector(
-    "#addItemButton"
-  );
+  document.querySelector("#addItemButton");
 
 const resetListButton =
-  document.querySelector(
-    "#resetListButton"
-  );
+  document.querySelector("#resetListButton");
 
 const compareButton =
-  document.querySelector(
-    "#compareButton"
-  );
+  document.querySelector("#compareButton");
 
 const remainingItemCount =
-  document.querySelector(
-    "#remainingItemCount"
-  );
+  document.querySelector("#remainingItemCount");
 
 const statusSection =
-  document.querySelector(
-    "#statusSection"
-  );
+  document.querySelector("#statusSection");
 
 const statusEl =
-  document.querySelector(
-    "#status"
-  );
+  document.querySelector("#status");
 
 const resultsSection =
-  document.querySelector(
-    "#resultsSection"
-  );
+  document.querySelector("#resultsSection");
 
 const resultsEl =
-  document.querySelector(
-    "#results"
-  );
+  document.querySelector("#results");
 
 const optimizationCardTemplate =
-  document.querySelector(
-    "#optimizationCardTemplate"
-  );
+  document.querySelector("#optimizationCardTemplate");
 
 
 /*
@@ -254,8 +133,132 @@ const optimizationCardTemplate =
  * =====================================================
  */
 
-let groceryList =
-  loadList();
+let groceryList = [];
+
+
+/*
+ * =====================================================
+ * PRODUCT CATALOG
+ * =====================================================
+ */
+
+async function loadProductCatalog() {
+  const response =
+    await fetch("/products.json", {
+      cache: "no-store"
+    });
+
+  if (!response.ok) {
+    throw new Error(
+      `Could not load product catalog (${response.status}).`
+    );
+  }
+
+  const catalog =
+    await response.json();
+
+  if (!Array.isArray(catalog)) {
+    throw new Error(
+      "Product catalog is not formatted correctly."
+    );
+  }
+
+  PRODUCT_LIST =
+    catalog.filter(
+      product =>
+        product &&
+        product.id &&
+        product.label &&
+        product.queryName
+    );
+
+  PRODUCTS =
+    Object.fromEntries(
+      PRODUCT_LIST.map(
+        product => [
+          product.id,
+          product
+        ]
+      )
+    );
+}
+
+
+function populateProductSelect() {
+  productSelect.innerHTML = "";
+
+  const placeholder =
+    document.createElement("option");
+
+  placeholder.value = "";
+  placeholder.textContent = "Select a product";
+
+  productSelect.appendChild(
+    placeholder
+  );
+
+  const categories = {};
+
+  for (const product of PRODUCT_LIST) {
+    const category =
+      product.category ||
+      "Other";
+
+    if (!categories[category]) {
+      categories[category] = [];
+    }
+
+    categories[category].push(
+      product
+    );
+  }
+
+  const categoryNames =
+    Object.keys(categories)
+      .sort(
+        (a, b) =>
+          a.localeCompare(b)
+      );
+
+  for (const category of categoryNames) {
+    const group =
+      document.createElement(
+        "optgroup"
+      );
+
+    group.label = category;
+
+    const products =
+      categories[category]
+        .sort(
+          (a, b) =>
+            a.label.localeCompare(
+              b.label
+            )
+        );
+
+    for (const product of products) {
+      const option =
+        document.createElement(
+          "option"
+        );
+
+      option.value =
+        product.id;
+
+      option.textContent =
+        product.label;
+
+      group.appendChild(
+        option
+      );
+    }
+
+    productSelect.appendChild(
+      group
+    );
+  }
+}
 
 
 /*
@@ -278,23 +281,17 @@ function loadList() {
     const parsed =
       JSON.parse(saved);
 
-    if (
-      !Array.isArray(parsed)
-    ) {
+    if (!Array.isArray(parsed)) {
       return [];
     }
 
     return parsed.filter(
       item =>
         item &&
-        PRODUCTS[
-          item.productId
-        ]
+        PRODUCTS[item.productId]
     );
 
-  } catch (
-    error
-  ) {
+  } catch (error) {
     return [];
   }
 }
@@ -326,50 +323,33 @@ function makeId() {
 }
 
 
-function money(
-  value
-) {
+function money(value) {
   const number =
     Number(value);
 
-  if (
-    !Number.isFinite(number)
-  ) {
+  if (!Number.isFinite(number)) {
     return "—";
   }
 
-  return new Intl
-    .NumberFormat(
-      "en-US",
-      {
-        style:
-          "currency",
-
-        currency:
-          "USD"
-      }
-    )
-    .format(number);
+  return new Intl.NumberFormat(
+    "en-US",
+    {
+      style: "currency",
+      currency: "USD"
+    }
+  ).format(number);
 }
 
 
-function quantityText(
-  quantity
-) {
+function quantityText(quantity) {
   const number =
     Number(quantity);
 
-  if (
-    !Number.isFinite(number)
-  ) {
+  if (!Number.isFinite(number)) {
     return "";
   }
 
-  return Number.isInteger(
-    number
-  )
-    ? String(number)
-    : String(number);
+  return String(number);
 }
 
 
@@ -410,7 +390,7 @@ function clearResults() {
 
 /*
  * =====================================================
- * PRODUCT / UNIT DROPDOWNS
+ * DROPDOWNS
  * =====================================================
  */
 
@@ -418,12 +398,9 @@ function rebuildUnitOptions(
   productId
 ) {
   const product =
-    PRODUCTS[
-      productId
-    ];
+    PRODUCTS[productId];
 
-  unitSelect.innerHTML =
-    "";
+  unitSelect.innerHTML = "";
 
   if (!product) {
     const option =
@@ -431,11 +408,8 @@ function rebuildUnitOptions(
         "option"
       );
 
-    option.value =
-      "each";
-
-    option.textContent =
-      "each";
+    option.value = "each";
+    option.textContent = "each";
 
     unitSelect.appendChild(
       option
@@ -448,17 +422,24 @@ function rebuildUnitOptions(
     return;
   }
 
-  for (
-    const unit of
-    product.allowedUnits
-  ) {
+  const allowedUnits =
+    Array.isArray(
+      product.allowedUnits
+    ) &&
+    product.allowedUnits.length
+      ? product.allowedUnits
+      : [
+          product.defaultUnit ||
+          "each"
+        ];
+
+  for (const unit of allowedUnits) {
     const option =
       document.createElement(
         "option"
       );
 
-    option.value =
-      unit;
+    option.value = unit;
 
     option.textContent =
       UNIT_LABELS[unit] ||
@@ -468,8 +449,7 @@ function rebuildUnitOptions(
       unit ===
       product.defaultUnit
     ) {
-      option.selected =
-        true;
+      option.selected = true;
     }
 
     unitSelect.appendChild(
@@ -478,7 +458,8 @@ function rebuildUnitOptions(
   }
 
   rebuildQuantityOptions(
-    product.defaultUnit
+    product.defaultUnit ||
+    allowedUnits[0]
   );
 }
 
@@ -486,26 +467,19 @@ function rebuildUnitOptions(
 function rebuildQuantityOptions(
   unit
 ) {
-  const currentValue =
+  const existing =
     Number(
       quantitySelect.value
     );
 
   const quantities =
-    (
-      unit === "each" ||
-      unit === "package"
-    )
+    COUNT_UNITS.has(unit)
       ? COUNT_QUANTITIES
       : MEASURE_QUANTITIES;
 
-  quantitySelect.innerHTML =
-    "";
+  quantitySelect.innerHTML = "";
 
-  for (
-    const quantity of
-    quantities
-  ) {
+  for (const quantity of quantities) {
     const option =
       document.createElement(
         "option"
@@ -523,35 +497,27 @@ function rebuildQuantityOptions(
   }
 
   if (
-    quantities.includes(
-      currentValue
-    )
+    quantities.includes(existing)
   ) {
     quantitySelect.value =
-      String(
-        currentValue
-      );
+      String(existing);
 
   } else {
-    quantitySelect.value =
-      "1";
+    quantitySelect.value = "1";
   }
 }
 
 
 /*
  * =====================================================
- * WEEKLY LIST RENDERING
+ * WEEKLY LIST
  * =====================================================
  */
 
 function renderList() {
-  groceryListEl.innerHTML =
-    "";
+  groceryListEl.innerHTML = "";
 
-  if (
-    !groceryList.length
-  ) {
+  if (!groceryList.length) {
     const empty =
       document.createElement(
         "div"
@@ -574,14 +540,9 @@ function renderList() {
     return;
   }
 
-  for (
-    const item of
-    groceryList
-  ) {
+  for (const item of groceryList) {
     const product =
-      PRODUCTS[
-        item.productId
-      ];
+      PRODUCTS[item.productId];
 
     if (!product) {
       continue;
@@ -618,9 +579,7 @@ function renderList() {
       );
 
     checkbox.checked =
-      Boolean(
-        item.completed
-      );
+      Boolean(item.completed);
 
     productEl.textContent =
       product.label;
@@ -628,16 +587,15 @@ function renderList() {
     metaEl.textContent =
       `${quantityText(
         item.quantity
-      )} ${UNIT_LABELS[
+      )} ${
+        UNIT_LABELS[item.unit] ||
         item.unit
-      ] || item.unit}`;
+      }`;
 
     article.dataset.itemId =
       item.id;
 
-    if (
-      item.completed
-    ) {
+    if (item.completed) {
       article.classList.add(
         "is-complete"
       );
@@ -698,7 +656,7 @@ function updateRemainingCount() {
 
 /*
  * =====================================================
- * ADD / RESET
+ * ADD ITEM
  * =====================================================
  */
 
@@ -715,9 +673,7 @@ function addItem() {
     unitSelect.value;
 
   const product =
-    PRODUCTS[
-      productId
-    ];
+    PRODUCTS[productId];
 
   if (!product) {
     setStatus(
@@ -729,9 +685,7 @@ function addItem() {
   }
 
   if (
-    !Number.isFinite(
-      quantity
-    ) ||
+    !Number.isFinite(quantity) ||
     quantity <= 0
   ) {
     setStatus(
@@ -742,9 +696,16 @@ function addItem() {
     return;
   }
 
+  const allowedUnits =
+    Array.isArray(
+      product.allowedUnits
+    )
+      ? product.allowedUnits
+      : [];
+
   if (
-    !product.allowedUnits
-      .includes(unit)
+    allowedUnits.length &&
+    !allowedUnits.includes(unit)
   ) {
     setStatus(
       "That unit is not available for this product.",
@@ -754,25 +715,17 @@ function addItem() {
     return;
   }
 
-  /*
-   * If the exact same product + unit already exists,
-   * increase the quantity instead of creating a duplicate.
-   */
-
   const existing =
     groceryList.find(
       item =>
         item.productId ===
           productId &&
-        item.unit ===
-          unit
+        item.unit === unit
     );
 
   if (existing) {
     existing.quantity =
-      Number(
-        existing.quantity
-      ) +
+      Number(existing.quantity) +
       quantity;
 
     existing.completed =
@@ -780,17 +733,11 @@ function addItem() {
 
   } else {
     groceryList.push({
-      id:
-        makeId(),
-
+      id: makeId(),
       productId,
-
       quantity,
-
       unit,
-
-      completed:
-        false
+      completed: false
     });
   }
 
@@ -799,22 +746,22 @@ function addItem() {
   clearResults();
   clearStatus();
 
-  productSelect.value =
-    "";
+  productSelect.value = "";
 
-  rebuildUnitOptions(
-    ""
-  );
+  rebuildUnitOptions("");
 
-  quantitySelect.value =
-    "1";
+  quantitySelect.value = "1";
 }
 
 
+/*
+ * =====================================================
+ * RESET WEEK
+ * =====================================================
+ */
+
 function resetWeeklyList() {
-  if (
-    !groceryList.length
-  ) {
+  if (!groceryList.length) {
     return;
   }
 
@@ -822,8 +769,7 @@ function resetWeeklyList() {
     groceryList.map(
       item => ({
         ...item,
-        completed:
-          false
+        completed: false
       })
     );
 
@@ -848,28 +794,26 @@ function buildBackendQuery(
   item
 ) {
   const product =
-    PRODUCTS[
-      item.productId
-    ];
+    PRODUCTS[item.productId];
 
   if (!product) {
     return null;
   }
 
   let quantity =
-    Number(
-      item.quantity
-    );
+    Number(item.quantity);
 
   let unit =
     item.unit;
 
   /*
-   * The current backend does not need to understand
-   * the word "package" directly.
+   * Known package equivalents are translated
+   * before being sent to the existing backend.
    *
-   * For products where we know the standard package
-   * equivalent, the front end quietly translates it.
+   * Example:
+   * 1 package baby carrots
+   * becomes
+   * 16 oz organic baby carrots
    */
 
   if (
@@ -878,9 +822,11 @@ function buildBackendQuery(
   ) {
     quantity =
       quantity *
-      product
-        .packageEquivalent
-        .quantity;
+      Number(
+        product
+          .packageEquivalent
+          .quantity
+      );
 
     unit =
       product
@@ -908,9 +854,7 @@ async function compareItem(
   item
 ) {
   const query =
-    buildBackendQuery(
-      item
-    );
+    buildBackendQuery(item);
 
   if (!query) {
     throw new Error(
@@ -925,9 +869,7 @@ async function compareItem(
       )}`
     );
 
-  if (
-    !response.ok
-  ) {
+  if (!response.ok) {
     throw new Error(
       `Price comparison failed with status ${response.status}.`
     );
@@ -936,9 +878,7 @@ async function compareItem(
   const data =
     await response.json();
 
-  if (
-    !data.ok
-  ) {
+  if (!data.ok) {
     throw new Error(
       data.message ||
       data.error ||
@@ -949,8 +889,7 @@ async function compareItem(
   return {
     item,
     query,
-    response:
-      data
+    response: data
   };
 }
 
@@ -966,19 +905,14 @@ function buildItemOffers(
 ) {
   const product =
     PRODUCTS[
-      comparison.item
-        .productId
+      comparison.item.productId
     ];
 
   const results =
     Array.isArray(
-      comparison
-        .response
-        .results
+      comparison.response.results
     )
-      ? comparison
-          .response
-          .results
+      ? comparison.response.results
       : [];
 
   return results
@@ -1045,34 +979,99 @@ function buildItemOffers(
 
 /*
  * =====================================================
- * LOWEST COST PLAN
+ * PLAN SHAPE
+ * =====================================================
+ */
+
+function buildPlan({
+  key,
+  label,
+  title,
+  selections,
+  unavailable
+}) {
+  const total =
+    selections.reduce(
+      (
+        sum,
+        selection
+      ) =>
+        sum +
+        selection.cost,
+      0
+    );
+
+  const stores = {};
+
+  for (const selection of selections) {
+    if (!stores[selection.retailer]) {
+      stores[selection.retailer] = {
+        retailer:
+          selection.retailer,
+
+        total: 0,
+
+        items: []
+      };
+    }
+
+    stores[
+      selection.retailer
+    ].total +=
+      selection.cost;
+
+    stores[
+      selection.retailer
+    ].items.push(
+      selection
+    );
+  }
+
+  return {
+    key,
+    label,
+    title,
+    total,
+
+    storeCount:
+      Object.keys(stores).length,
+
+    selections,
+    unavailable,
+
+    stores:
+      Object.values(stores)
+        .sort(
+          (a, b) =>
+            a.retailer.localeCompare(
+              b.retailer
+            )
+        )
+  };
+}
+
+
+/*
+ * =====================================================
+ * LOWEST COST
  * =====================================================
  */
 
 function buildLowestCostPlan(
   itemsWithOffers
 ) {
-  const selections =
-    [];
+  const selections = [];
+  const unavailable = [];
 
-  const unavailable =
-    [];
-
-  for (
-    const entry of
-    itemsWithOffers
-  ) {
+  for (const entry of itemsWithOffers) {
     const offers =
       [...entry.offers]
         .sort(
           (a, b) =>
-            a.cost -
-            b.cost
+            a.cost - b.cost
         );
 
-    if (
-      !offers.length
-    ) {
+    if (!offers.length) {
       unavailable.push(
         entry.item
       );
@@ -1086,17 +1085,10 @@ function buildLowestCostPlan(
   }
 
   return buildPlan({
-    key:
-      "lowest",
-
-    label:
-      "LOWEST COST",
-
-    title:
-      "Cheapest overall",
-
+    key: "lowest",
+    label: "LOWEST COST",
+    title: "Cheapest overall",
     selections,
-
     unavailable
   });
 }
@@ -1104,35 +1096,23 @@ function buildLowestCostPlan(
 
 /*
  * =====================================================
- * BEST BALANCE PLAN
- *
- * Because we currently compare only four retailers,
- * we can safely evaluate every possible retailer
- * combination.
- *
- * The displayed total is always the real grocery cost.
- * The $5/store value is used only to decide which
- * combination provides the best convenience/cost balance.
+ * BEST BALANCE
  * =====================================================
  */
 
 function getAllStoreSubsets(
   retailers
 ) {
-  const subsets =
-    [];
-
+  const subsets = [];
   const count =
     retailers.length;
 
   for (
     let mask = 1;
-    mask <
-      (1 << count);
+    mask < (1 << count);
     mask += 1
   ) {
-    const subset =
-      [];
+    const subset = [];
 
     for (
       let index = 0;
@@ -1149,9 +1129,7 @@ function getAllStoreSubsets(
       }
     }
 
-    subsets.push(
-      subset
-    );
+    subsets.push(subset);
   }
 
   return subsets;
@@ -1179,23 +1157,13 @@ function buildBestBalancePlan(
       retailers
     );
 
-  let best =
-    null;
+  let best = null;
 
-  for (
-    const subset of
-    subsets
-  ) {
-    const selections =
-      [];
+  for (const subset of subsets) {
+    const selections = [];
+    const unavailable = [];
 
-    const unavailable =
-      [];
-
-    for (
-      const entry of
-      itemsWithOffers
-    ) {
+    for (const entry of itemsWithOffers) {
       const eligible =
         entry.offers
           .filter(
@@ -1206,13 +1174,10 @@ function buildBestBalancePlan(
           )
           .sort(
             (a, b) =>
-              a.cost -
-              b.cost
+              a.cost - b.cost
           );
 
-      if (
-        !eligible.length
-      ) {
+      if (!eligible.length) {
         unavailable.push(
           entry.item
         );
@@ -1225,14 +1190,7 @@ function buildBestBalancePlan(
       );
     }
 
-    /*
-     * Best Balance should cover the complete list
-     * whenever possible.
-     */
-
-    if (
-      unavailable.length
-    ) {
+    if (unavailable.length) {
       continue;
     }
 
@@ -1288,8 +1246,7 @@ function buildBestBalancePlan(
           best.actualTotal
       )
     ) {
-      best =
-        candidate;
+      best = candidate;
     }
   }
 
@@ -1300,18 +1257,11 @@ function buildBestBalancePlan(
   }
 
   return buildPlan({
-    key:
-      "balance",
-
-    label:
-      "BEST BALANCE",
-
-    title:
-      "Low cost + fewer stops",
-
+    key: "balance",
+    label: "BEST BALANCE",
+    title: "Low cost + fewer stops",
     selections:
       best.selections,
-
     unavailable:
       best.unavailable
   });
@@ -1320,7 +1270,7 @@ function buildBestBalancePlan(
 
 /*
  * =====================================================
- * ONE STORE PLAN
+ * ONE STORE
  * =====================================================
  */
 
@@ -1340,23 +1290,13 @@ function buildOneStorePlan(
       )
     ];
 
-  let best =
-    null;
+  let best = null;
 
-  for (
-    const retailer of
-    retailers
-  ) {
-    const selections =
-      [];
+  for (const retailer of retailers) {
+    const selections = [];
+    const unavailable = [];
 
-    const unavailable =
-      [];
-
-    for (
-      const entry of
-      itemsWithOffers
-    ) {
+    for (const entry of itemsWithOffers) {
       const offer =
         entry.offers
           .filter(
@@ -1366,8 +1306,7 @@ function buildOneStorePlan(
           )
           .sort(
             (a, b) =>
-              a.cost -
-              b.cost
+              a.cost - b.cost
           )[0];
 
       if (offer) {
@@ -1413,25 +1352,17 @@ function buildOneStorePlan(
           best.cost
       )
     ) {
-      best =
-        candidate;
+      best = candidate;
     }
   }
 
   if (!best) {
     return buildPlan({
-      key:
-        "one-store",
-
-      label:
-        "ONE STORE",
-
+      key: "one-store",
+      label: "ONE STORE",
       title:
         "No single-store option",
-
-      selections:
-        [],
-
+      selections: [],
       unavailable:
         itemsWithOffers.map(
           entry =>
@@ -1441,11 +1372,8 @@ function buildOneStorePlan(
   }
 
   return buildPlan({
-    key:
-      "one-store",
-
-    label:
-      "ONE STORE",
+    key: "one-store",
+    label: "ONE STORE",
 
     title:
       best.unavailable.length
@@ -1463,98 +1391,7 @@ function buildOneStorePlan(
 
 /*
  * =====================================================
- * PLAN SHAPE
- * =====================================================
- */
-
-function buildPlan({
-  key,
-  label,
-  title,
-  selections,
-  unavailable
-}) {
-  const total =
-    selections.reduce(
-      (
-        sum,
-        selection
-      ) =>
-        sum +
-        selection.cost,
-      0
-    );
-
-  const stores =
-    {};
-
-  for (
-    const selection of
-    selections
-  ) {
-    if (
-      !stores[
-        selection.retailer
-      ]
-    ) {
-      stores[
-        selection.retailer
-      ] = {
-        retailer:
-          selection.retailer,
-
-        total:
-          0,
-
-        items:
-          []
-      };
-    }
-
-    stores[
-      selection.retailer
-    ].total +=
-      selection.cost;
-
-    stores[
-      selection.retailer
-    ].items.push(
-      selection
-    );
-  }
-
-  return {
-    key,
-    label,
-    title,
-
-    total,
-
-    storeCount:
-      Object.keys(
-        stores
-      ).length,
-
-    selections,
-
-    unavailable,
-
-    stores:
-      Object.values(
-        stores
-      ).sort(
-        (a, b) =>
-          a.retailer.localeCompare(
-            b.retailer
-          )
-      )
-  };
-}
-
-
-/*
- * =====================================================
- * FRESHNESS DISPLAY
+ * FRESHNESS
  * =====================================================
  */
 
@@ -1579,17 +1416,13 @@ function freshnessText(
     offer.freshness ===
     "aging"
   ) {
-    if (
-      offer.ageDays === 1
-    ) {
+    if (offer.ageDays === 1) {
       return "Updated 1 day ago";
     }
 
     if (
       Number.isFinite(
-        Number(
-          offer.ageDays
-        )
+        Number(offer.ageDays)
       )
     ) {
       return `Updated ${offer.ageDays} days ago`;
@@ -1602,23 +1435,17 @@ function freshnessText(
     offer.freshness ===
     "current"
   ) {
-    if (
-      offer.ageDays === 0
-    ) {
+    if (offer.ageDays === 0) {
       return "Updated today";
     }
 
-    if (
-      offer.ageDays === 1
-    ) {
+    if (offer.ageDays === 1) {
       return "Updated 1 day ago";
     }
 
     if (
       Number.isFinite(
-        Number(
-          offer.ageDays
-        )
+        Number(offer.ageDays)
       )
     ) {
       return `Updated ${offer.ageDays} days ago`;
@@ -1637,9 +1464,7 @@ function freshnessText(
  * =====================================================
  */
 
-function renderPlan(
-  plan
-) {
+function renderPlan(plan) {
   const fragment =
     optimizationCardTemplate
       .content
@@ -1685,9 +1510,7 @@ function renderPlan(
     plan.title;
 
   total.textContent =
-    money(
-      plan.total
-    );
+    money(plan.total);
 
   const storeWord =
     plan.storeCount === 1
@@ -1697,10 +1520,8 @@ function renderPlan(
   meta.textContent =
     `${plan.storeCount} ${storeWord} · ${plan.selections.length} items priced`;
 
-  for (
-    const store of
-    plan.stores
-  ) {
+
+  for (const store of plan.stores) {
     const storeBlock =
       document.createElement(
         "section"
@@ -1708,6 +1529,7 @@ function renderPlan(
 
     storeBlock.className =
       "store-plan";
+
 
     const storeHeader =
       document.createElement(
@@ -1717,6 +1539,7 @@ function renderPlan(
     storeHeader.className =
       "store-plan-header";
 
+
     const storeName =
       document.createElement(
         "strong"
@@ -1725,15 +1548,15 @@ function renderPlan(
     storeName.textContent =
       store.retailer;
 
+
     const storeTotal =
       document.createElement(
         "span"
       );
 
     storeTotal.textContent =
-      money(
-        store.total
-      );
+      money(store.total);
+
 
     storeHeader.append(
       storeName,
@@ -1754,10 +1577,7 @@ function renderPlan(
       "store-item-list";
 
 
-    for (
-      const offer of
-      store.items
-    ) {
+    for (const offer of store.items) {
       const row =
         document.createElement(
           "div"
@@ -1794,9 +1614,7 @@ function renderPlan(
         "store-item-details";
 
       const freshness =
-        freshnessText(
-          offer
-        );
+        freshnessText(offer);
 
       details.textContent =
         [
@@ -1823,9 +1641,7 @@ function renderPlan(
         "store-item-price";
 
       price.textContent =
-        money(
-          offer.cost
-        );
+        money(offer.cost);
 
 
       main.append(
@@ -1854,9 +1670,7 @@ function renderPlan(
   }
 
 
-  if (
-    plan.unavailable.length
-  ) {
+  if (plan.unavailable.length) {
     const unavailable =
       document.createElement(
         "div"
@@ -1864,6 +1678,7 @@ function renderPlan(
 
     unavailable.className =
       "unavailable-items";
+
 
     const heading =
       document.createElement(
@@ -1910,7 +1725,7 @@ function renderPlan(
 
 /*
  * =====================================================
- * COMPARE FULL WEEKLY LIST
+ * COMPARE WEEKLY LIST
  * =====================================================
  */
 
@@ -1921,9 +1736,7 @@ async function compareWeeklyList() {
         !item.completed
     );
 
-  if (
-    !activeItems.length
-  ) {
+  if (!activeItems.length) {
     setStatus(
       "Everything on your weekly list is already checked off.",
       "info"
@@ -1950,10 +1763,6 @@ async function compareWeeklyList() {
   );
 
   try {
-    /*
-     * Run the item comparisons in parallel.
-     */
-
     const settled =
       await Promise.allSettled(
         activeItems.map(
@@ -1961,19 +1770,12 @@ async function compareWeeklyList() {
         )
       );
 
-
-    const comparisons =
-      [];
-
-    const failedItems =
-      [];
+    const comparisons = [];
+    const failedItems = [];
 
 
     settled.forEach(
-      (
-        result,
-        index
-      ) => {
+      (result, index) => {
         if (
           result.status ===
           "fulfilled"
@@ -1983,19 +1785,15 @@ async function compareWeeklyList() {
           );
 
         } else {
-          failedItems.push(
-            {
-              item:
-                activeItems[
-                  index
-                ],
+          failedItems.push({
+            item:
+              activeItems[index],
 
-              error:
-                result.reason
-                  ?.message ||
-                "Comparison failed."
-            }
-          );
+            error:
+              result.reason
+                ?.message ||
+              "Comparison failed."
+          });
         }
       }
     );
@@ -2018,24 +1816,14 @@ async function compareWeeklyList() {
       );
 
 
-    /*
-     * Preserve items whose API call succeeded but
-     * had no retailer results.
-     */
-
-    for (
-      const failed of
-      failedItems
-    ) {
+    for (const failed of failedItems) {
       itemsWithOffers.push({
         item:
           failed.item,
 
-        response:
-          null,
+        response: null,
 
-        offers:
-          []
+        offers: []
       });
     }
 
@@ -2056,20 +1844,11 @@ async function compareWeeklyList() {
       );
 
 
-    resultsEl.innerHTML =
-      "";
+    resultsEl.innerHTML = "";
 
-    renderPlan(
-      lowestCost
-    );
-
-    renderPlan(
-      bestBalance
-    );
-
-    renderPlan(
-      oneStore
-    );
+    renderPlan(lowestCost);
+    renderPlan(bestBalance);
+    renderPlan(oneStore);
 
     resultsSection.hidden =
       false;
@@ -2082,15 +1861,13 @@ async function compareWeeklyList() {
       ).length;
 
 
-    if (
-      unavailableCount
-    ) {
+    if (unavailableCount) {
       setStatus(
         `Comparison complete. ${unavailableCount} ${
           unavailableCount === 1
             ? "item did"
             : "items did"
-        } not return a valid retailer price.`,
+        } not return a valid retailer price yet.`,
         "warning"
       );
 
@@ -2101,9 +1878,7 @@ async function compareWeeklyList() {
       );
     }
 
-  } catch (
-    error
-  ) {
+  } catch (error) {
     setStatus(
       error.message ||
       "Something went wrong while comparing prices.",
@@ -2175,10 +1950,45 @@ compareButton.addEventListener(
  * =====================================================
  */
 
-rebuildUnitOptions(
-  productSelect.value
-);
+async function initializeApp() {
+  productSelect.disabled = true;
+  quantitySelect.disabled = true;
+  unitSelect.disabled = true;
+  addItemButton.disabled = true;
+  compareButton.disabled = true;
 
-renderList();
-clearResults();
-clearStatus();
+  setStatus(
+    "Loading grocery catalog...",
+    "loading"
+  );
+
+  try {
+    await loadProductCatalog();
+
+    populateProductSelect();
+
+    groceryList =
+      loadList();
+
+    rebuildUnitOptions("");
+
+    renderList();
+
+    productSelect.disabled = false;
+    quantitySelect.disabled = false;
+    unitSelect.disabled = false;
+    addItemButton.disabled = false;
+
+    clearStatus();
+
+  } catch (error) {
+    setStatus(
+      error.message ||
+      "The grocery catalog could not be loaded.",
+      "error"
+    );
+  }
+}
+
+
+initializeApp();
