@@ -1,15 +1,13 @@
-/*
- * earthfare.js
- *
- * Thin Earth Fare wrapper around the shared
- * evidence-retailer engine.
- */
-
 const {
   createEvidenceRetailer,
   getFreshnessStatus,
   calculateAgeDays
 } = require("./evidence-retailer");
+
+const {
+  searchEarthFareDynamic,
+  buildEarthFareDynamicStatus
+} = require("./earthfare-dynamic");
 
 
 /*
@@ -21,30 +19,24 @@ const {
 let EARTH_FARE_EVIDENCE = [];
 let EARTH_FARE_EVIDENCE_LOAD_ERROR = null;
 
-
 try {
-
   const loaded =
     require("../../../data/earthfare-evidence.json");
 
-
   if (
-    Array.isArray(
-      loaded
-    )
+    Array.isArray(loaded)
   ) {
-
     EARTH_FARE_EVIDENCE =
       loaded;
 
   } else {
-
     EARTH_FARE_EVIDENCE_LOAD_ERROR =
       "earthfare-evidence.json loaded, but it does not contain a JSON array.";
   }
 
-} catch (error) {
-
+} catch (
+  error
+) {
   EARTH_FARE_EVIDENCE_LOAD_ERROR =
     error.message;
 }
@@ -79,11 +71,11 @@ const EARTH_FARE_MARKET = {
 
 /*
  * =====================================================
- * SHARED RETAILER ADAPTER
+ * STATIC EVIDENCE ADAPTER
  * =====================================================
  */
 
-const earthFareAdapter =
+const earthFareEvidenceAdapter =
   createEvidenceRetailer({
     retailer:
       "Earth Fare",
@@ -131,39 +123,249 @@ const earthFareAdapter =
 
 /*
  * =====================================================
- * COMPATIBILITY FUNCTIONS
+ * EXISTING EVIDENCE HELPERS
  * =====================================================
  */
 
 function loadEarthFareEvidence() {
-  return (
-    earthFareAdapter
-      .loadEvidence()
-  );
+  return earthFareEvidenceAdapter
+    .loadEvidence();
 }
 
 
 async function retrieveEarthFareCandidates(
   request
 ) {
-  return (
-    earthFareAdapter
-      .retrieveCandidates(
-        request
-      )
-  );
+  return earthFareEvidenceAdapter
+    .retrieveCandidates(
+      request
+    );
 }
 
+
+/*
+ * =====================================================
+ * EVIDENCE + DYNAMIC FALLBACK
+ *
+ * Flow:
+ *
+ * 1. Existing Earth Fare evidence first
+ * 2. If evidence produces a valid offer, return it
+ * 3. If evidence has no accepted offers, try dynamic
+ * 4. If dynamic produces valid offers, return those
+ * 5. Otherwise return the original evidence response
+ *
+ * Nothing is invented.
+ * =====================================================
+ */
 
 async function getEarthFareOffers(
   request
 ) {
-  return (
-    earthFareAdapter
+  const evidenceResult =
+    await earthFareEvidenceAdapter
       .getOffers(
         request
-      )
-  );
+      );
+
+
+  const evidenceOffers =
+    Array.isArray(
+      evidenceResult?.offers
+    )
+      ? evidenceResult.offers
+      : [];
+
+
+  /*
+   * Existing evidence remains authoritative
+   * whenever it produces one or more valid offers.
+   */
+
+  if (
+    evidenceOffers.length > 0
+  ) {
+    return {
+      ...evidenceResult,
+
+      retrieval: {
+        ...evidenceResult.retrieval,
+
+        primarySource:
+          "earthfare-evidence-file",
+
+        fallbackAttempted:
+          false,
+
+        fallbackSource:
+          null,
+
+        fallbackAcceptedCount:
+          0
+      },
+
+      dynamic:
+        null
+    };
+  }
+
+
+  /*
+   * No valid evidence match.
+   * Try the dynamic adapter.
+   */
+
+  const dynamicResult =
+    await searchEarthFareDynamic(
+      request
+    );
+
+
+  const dynamicOffers =
+    Array.isArray(
+      dynamicResult?.offers
+    )
+      ? dynamicResult.offers
+      : [];
+
+
+  const dynamicStatus =
+    buildEarthFareDynamicStatus(
+      dynamicResult
+    );
+
+
+  /*
+   * If the dynamic layer returns valid offers,
+   * those become the Earth Fare results.
+   */
+
+  if (
+    dynamicOffers.length > 0
+  ) {
+    return {
+      retailer:
+        "Earth Fare",
+
+      market:
+        EARTH_FARE_MARKET,
+
+      request,
+
+      retrieval: {
+        source:
+          dynamicResult
+            ?.retrieval
+            ?.source ||
+          "earthfare-dynamic-search",
+
+        primarySource:
+          evidenceResult
+            ?.retrieval
+            ?.source ||
+          "earthfare-evidence-file",
+
+        evidencePath:
+          evidenceResult
+            ?.retrieval
+            ?.evidencePath ||
+          "bundled:data/earthfare-evidence.json",
+
+        totalEvidenceRecords:
+          Number(
+            evidenceResult
+              ?.retrieval
+              ?.totalEvidenceRecords ||
+            0
+          ),
+
+        recordCount:
+          Number(
+            dynamicResult
+              ?.retrieval
+              ?.recordCount ||
+            0
+          ),
+
+        acceptedCount:
+          dynamicOffers.length,
+
+        loadError:
+          evidenceResult
+            ?.retrieval
+            ?.loadError ||
+          null,
+
+        fallbackAttempted:
+          true,
+
+        fallbackSource:
+          dynamicResult
+            ?.retrieval
+            ?.source ||
+          null,
+
+        fallbackAcceptedCount:
+          dynamicOffers.length,
+
+        dynamicStatus
+      },
+
+      offers:
+        dynamicOffers,
+
+      winner:
+        dynamicOffers[0] ||
+        null,
+
+      dynamic:
+        dynamicResult
+    };
+  }
+
+
+  /*
+   * Dynamic fallback also found nothing.
+   *
+   * Return the original evidence result so the rest of
+   * the application continues to receive the familiar
+   * Earth Fare response shape.
+   */
+
+  return {
+    ...evidenceResult,
+
+    retrieval: {
+      ...evidenceResult.retrieval,
+
+      primarySource:
+        evidenceResult
+          ?.retrieval
+          ?.source ||
+        "earthfare-evidence-file",
+
+      fallbackAttempted:
+        Boolean(
+          dynamicResult
+            ?.retrieval
+            ?.attempted
+        ),
+
+      fallbackSource:
+        dynamicResult
+          ?.retrieval
+          ?.source ||
+        null,
+
+      fallbackAcceptedCount:
+        dynamicOffers.length,
+
+      dynamicStatus
+    },
+
+    dynamic:
+      dynamicResult
+  };
 }
 
 
