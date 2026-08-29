@@ -3,14 +3,26 @@
  *
  * Sprouts retailer adapter for Grocery Optimizer.
  *
- * Sprouts pricing is loaded from the repository file:
- *
+ * DATA SOURCE
+ * -----------
  * data/sprouts-evidence.json
  *
- * IMPORTANT:
- * The evidence JSON is imported as a STATIC dependency.
- * This allows Netlify's function bundler to include the
- * file reliably instead of depending on runtime paths.
+ * This is dated retailer evidence, not a live Sprouts API.
+ *
+ * This adapter now handles:
+ * - evidence loading
+ * - canonical product filtering
+ * - package normalization
+ * - product match scoring
+ * - confidence scoring
+ * - package requirement math
+ * - freshness / staleness tracking
+ *
+ * FRESHNESS RULES
+ * ---------------
+ * 0–7 days   -> current
+ * 8–14 days  -> aging
+ * 15+ days   -> stale
  */
 
 const {
@@ -22,26 +34,13 @@ const {
 
 /*
  * =====================================================
- * STATIC SPROUTS EVIDENCE IMPORT
- * =====================================================
- *
- * sprouts.js lives at:
- *
- * netlify/functions/lib/sprouts.js
- *
- * therefore:
- *
- * ../../../data/sprouts-evidence.json
- *
- * reaches the repository-level data folder.
- *
- * Because this require() uses a literal path, Netlify
- * can discover and bundle the JSON during deployment.
+ * STATIC EVIDENCE IMPORT
  * =====================================================
  */
 
 let SPROUTS_EVIDENCE = [];
 let SPROUTS_EVIDENCE_LOAD_ERROR = null;
+
 
 try {
 
@@ -89,6 +88,16 @@ const SPROUTS_MARKET = {
 
 /*
  * =====================================================
+ * FRESHNESS CONSTANTS
+ * =====================================================
+ */
+
+const CURRENT_MAX_DAYS = 7;
+const AGING_MAX_DAYS = 14;
+
+
+/*
+ * =====================================================
  * LOAD EVIDENCE
  * =====================================================
  */
@@ -120,7 +129,209 @@ function loadSproutsEvidence() {
 
 /*
  * =====================================================
+ * DATE HELPERS
+ * =====================================================
+ */
+
+function parseObservedDate(
+  observedAt
+) {
+
+  if (
+    !observedAt
+  ) {
+    return null;
+  }
+
+
+  const date =
+    new Date(
+      observedAt
+    );
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return null;
+  }
+
+
+  return date;
+}
+
+
+/*
+ * =====================================================
+ * CALCULATE AGE IN DAYS
+ * =====================================================
+ */
+
+function calculateAgeDays(
+  observedAt,
+  now = new Date()
+) {
+
+  const observed =
+    parseObservedDate(
+      observedAt
+    );
+
+
+  if (
+    !observed
+  ) {
+    return null;
+  }
+
+
+  const nowDate =
+    now instanceof Date
+      ? now
+      : new Date(now);
+
+
+  if (
+    Number.isNaN(
+      nowDate.getTime()
+    )
+  ) {
+    return null;
+  }
+
+
+  const diffMilliseconds =
+    nowDate.getTime() -
+    observed.getTime();
+
+
+  /*
+   * Future timestamps should not produce
+   * negative ages.
+   */
+
+  const rawDays =
+    diffMilliseconds /
+    86400000;
+
+
+  return Math.max(
+    0,
+    Math.floor(
+      rawDays
+    )
+  );
+}
+
+
+/*
+ * =====================================================
+ * FRESHNESS STATUS
+ *
+ * Returns:
+ *
+ * {
+ *   observedAt,
+ *   ageDays,
+ *   freshness,
+ *   needsRefresh
+ * }
+ * =====================================================
+ */
+
+function getFreshnessStatus(
+  observedAt,
+  now = new Date()
+) {
+
+  const ageDays =
+    calculateAgeDays(
+      observedAt,
+      now
+    );
+
+
+  if (
+    ageDays === null
+  ) {
+
+    return {
+      observedAt:
+        observedAt ||
+        null,
+
+      ageDays:
+        null,
+
+      freshness:
+        "unknown",
+
+      needsRefresh:
+        true
+    };
+  }
+
+
+  if (
+    ageDays <=
+    CURRENT_MAX_DAYS
+  ) {
+
+    return {
+      observedAt,
+
+      ageDays,
+
+      freshness:
+        "current",
+
+      needsRefresh:
+        false
+    };
+  }
+
+
+  if (
+    ageDays <=
+    AGING_MAX_DAYS
+  ) {
+
+    return {
+      observedAt,
+
+      ageDays,
+
+      freshness:
+        "aging",
+
+      needsRefresh:
+        true
+    };
+  }
+
+
+  return {
+    observedAt,
+
+    ageDays,
+
+    freshness:
+      "stale",
+
+    needsRefresh:
+      true
+  };
+}
+
+
+/*
+ * =====================================================
  * CONFIDENCE SCORE
+ *
+ * Confidence measures reliability of the evidence,
+ * separately from product match.
  * =====================================================
  */
 
@@ -162,7 +373,7 @@ function scoreConfidence(
 
 
   /*
-   * Package size
+   * Known package size
    */
 
   if (
@@ -193,58 +404,43 @@ function scoreConfidence(
 
 
   /*
-   * Freshness
+   * Freshness confidence
    */
 
+  const freshness =
+    getFreshnessStatus(
+      evidence.observedAt
+    );
+
+
   if (
-    evidence.observedAt
+    freshness.freshness ===
+    "current"
   ) {
 
-    const observed =
-      new Date(
-        evidence.observedAt
-      );
-
-
     if (
-      !Number.isNaN(
-        observed.getTime()
-      )
+      freshness.ageDays <= 1
     ) {
 
-      const ageHours =
-        (
-          Date.now() -
-          observed.getTime()
-        ) /
-        3600000;
+      score += 20;
 
+    } else if (
+      freshness.ageDays <= 3
+    ) {
 
-      if (
-        ageHours <= 24
-      ) {
+      score += 15;
 
-        score += 20;
+    } else {
 
-      } else if (
-        ageHours <= 72
-      ) {
-
-        score += 15;
-
-      } else if (
-        ageHours <= 168
-      ) {
-
-        score += 10;
-
-      } else if (
-        ageHours <= 720
-      ) {
-
-        score += 5;
-      }
+      score += 10;
     }
+
+  } else if (
+    freshness.freshness ===
+    "aging"
+  ) {
+
+    score += 5;
   }
 
 
@@ -304,7 +500,7 @@ async function retrieveSproutsCandidates(
   /*
    * ===================================================
    * PRIMARY:
-   * bundled sprouts-evidence.json
+   * sprouts-evidence.json
    * ===================================================
    */
 
@@ -340,11 +536,6 @@ async function retrieveSproutsCandidates(
           }
 
 
-          /*
-           * Require exact canonical product match
-           * whenever the request contains one.
-           */
-
           if (
             canonicalId
           ) {
@@ -369,11 +560,6 @@ async function retrieveSproutsCandidates(
       );
 
 
-    /*
-     * Use real evidence only if a matching product
-     * exists in the evidence file.
-     */
-
     if (
       matchingRecords.length
     ) {
@@ -397,11 +583,6 @@ async function retrieveSproutsCandidates(
     }
 
 
-    /*
-     * Evidence file loaded correctly, but the
-     * requested canonical product is not present.
-     */
-
     return {
       source:
         "sprouts-evidence-file-no-match",
@@ -424,9 +605,6 @@ async function retrieveSproutsCandidates(
   /*
    * ===================================================
    * FALLBACK
-   *
-   * Only used if the bundled evidence file itself
-   * could not be loaded.
    * ===================================================
    */
 
@@ -462,7 +640,7 @@ async function retrieveSproutsCandidates(
 
 /*
  * =====================================================
- * NORMALIZE ONE SPROUTS RECORD
+ * NORMALIZE SPROUTS EVIDENCE
  * =====================================================
  */
 
@@ -562,6 +740,12 @@ function normalizeSproutsEvidence(
   }
 
 
+  const freshness =
+    getFreshnessStatus(
+      evidence.observedAt
+    );
+
+
   normalized.confidenceScore =
     scoreConfidence({
       retailer:
@@ -611,14 +795,25 @@ function normalizeSproutsEvidence(
     null;
 
 
-  /*
-   * Preserve the human-readable package size from
-   * the evidence file for the front end.
-   */
-
   normalized.rawSize =
     evidence.size ||
     null;
+
+
+  /*
+   * Freshness metadata
+   */
+
+  normalized.ageDays =
+    freshness.ageDays;
+
+
+  normalized.freshness =
+    freshness.freshness;
+
+
+  normalized.needsRefresh =
+    freshness.needsRefresh;
 
 
   return normalized;
@@ -653,7 +848,7 @@ async function getSproutsOffers(
 
   /*
    * ===================================================
-   * NORMALIZE / MATCH / CONFIDENCE / PACKAGE PLAN
+   * NORMALIZE / SCORE / PLAN
    * ===================================================
    */
 
@@ -690,11 +885,11 @@ async function getSproutsOffers(
 
 
     /*
-     * Reject:
+     * Reject incompatible packages,
+     * weak matches and unusable evidence.
      *
-     * - incompatible package units
-     * - weak product matches
-     * - very low-confidence evidence
+     * STALE evidence is NOT automatically rejected.
+     * We keep it available, but flag it clearly.
      */
 
     if (
@@ -702,7 +897,7 @@ async function getSproutsOffers(
       matchScore < 60 ||
       normalized
         .confidenceScore <
-        40
+        30
     ) {
       continue;
     }
@@ -751,6 +946,15 @@ async function getSproutsOffers(
       observedAt:
         normalized.observedAt,
 
+      ageDays:
+        normalized.ageDays,
+
+      freshness:
+        normalized.freshness,
+
+      needsRefresh:
+        normalized.needsRefresh,
+
       matchScore,
 
       confidenceScore:
@@ -769,21 +973,81 @@ async function getSproutsOffers(
    * ===================================================
    * SORT
    *
-   * 1. lowest actual cost to fulfill request
-   * 2. strongest match
-   * 3. strongest confidence
+   * 1. lowest actual purchase cost
+   * 2. fresher evidence
+   * 3. stronger product match
+   * 4. stronger confidence
    * ===================================================
    */
+
+  const freshnessRank = {
+    current: 0,
+    aging: 1,
+    stale: 2,
+    unknown: 3
+  };
+
 
   offers.sort(
     (a, b) =>
       a.totalCost -
         b.totalCost ||
+
+      (
+        freshnessRank[
+          a.freshness
+        ] ?? 99
+      ) -
+      (
+        freshnessRank[
+          b.freshness
+        ] ?? 99
+      ) ||
+
       b.matchScore -
         a.matchScore ||
+
       b.confidenceScore -
         a.confidenceScore
   );
+
+
+  /*
+   * ===================================================
+   * RETRIEVAL-LEVEL FRESHNESS SUMMARY
+   * ===================================================
+   */
+
+  const refreshNeededCount =
+    offers.filter(
+      offer =>
+        offer.needsRefresh ===
+        true
+    ).length;
+
+
+  const currentCount =
+    offers.filter(
+      offer =>
+        offer.freshness ===
+        "current"
+    ).length;
+
+
+  const agingCount =
+    offers.filter(
+      offer =>
+        offer.freshness ===
+        "aging"
+    ).length;
+
+
+  const staleCount =
+    offers.filter(
+      offer =>
+        offer.freshness ===
+        "stale"
+    ).length;
 
 
   /*
@@ -821,7 +1085,21 @@ async function getSproutsOffers(
 
       loadError:
         retrieval.loadError ||
-        null
+        null,
+
+      freshness: {
+        current:
+          currentCount,
+
+        aging:
+          agingCount,
+
+        stale:
+          staleCount,
+
+        needsRefresh:
+          refreshNeededCount
+      }
     },
 
     offers,
@@ -842,7 +1120,17 @@ async function getSproutsOffers(
 module.exports = {
   SPROUTS_MARKET,
 
+  CURRENT_MAX_DAYS,
+
+  AGING_MAX_DAYS,
+
   loadSproutsEvidence,
+
+  parseObservedDate,
+
+  calculateAgeDays,
+
+  getFreshnessStatus,
 
   scoreConfidence,
 
