@@ -1,1083 +1,1385 @@
-const fs = require("fs");
-const path = require("path");
+/*
+ * normalize.js
+ *
+ * Shared grocery normalization engine.
+ *
+ * This file converts retailer package sizes into common
+ * units so Grocery Optimizer can compare actual purchase cost.
+ *
+ * Internal normalization:
+ * - Weight  -> ounces
+ * - Liquid  -> fluid ounces
+ * - Count   -> each
+ */
 
-const KROGER_BASE = "https://api.kroger.com/v1";
-const TARGET_ZIP = "37922";
-const TARGET_ADDRESS = "9225 KINGSTON PIKE";
 
-let tokenCache = {
-  token: null,
-  expiresAt: 0
+/*
+ * =====================================================
+ * BASIC HELPERS
+ * =====================================================
+ */
+
+function cleanText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+
+function round(value, decimals = 4) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+
+  const factor = 10 ** decimals;
+
+  return Math.round(number * factor) / factor;
+}
+
+
+/*
+ * =====================================================
+ * UNIT ALIASES
+ * =====================================================
+ */
+
+const UNIT_ALIASES = {
+  lb: "lb",
+  lbs: "lb",
+  pound: "lb",
+  pounds: "lb",
+
+  oz: "oz",
+  ounce: "oz",
+  ounces: "oz",
+
+  g: "g",
+  gram: "g",
+  grams: "g",
+
+  kg: "kg",
+  kilogram: "kg",
+  kilograms: "kg",
+
+  each: "each",
+  ea: "each",
+  count: "each",
+  counts: "each",
+  ct: "each",
+  piece: "each",
+  pieces: "each",
+  item: "each",
+  items: "each",
+
+  "fl oz": "fl_oz",
+  "fl. oz": "fl_oz",
+  "fl. oz.": "fl_oz",
+  floz: "fl_oz",
+  "fluid ounce": "fl_oz",
+  "fluid ounces": "fl_oz",
+
+  pint: "pint",
+  pints: "pint",
+  pt: "pint",
+  pts: "pint",
+
+  quart: "quart",
+  quarts: "quart",
+  qt: "quart",
+  qts: "quart",
+
+  gallon: "gallon",
+  gallons: "gallon",
+  gal: "gallon",
+  gals: "gallon",
+
+  ml: "ml",
+  milliliter: "ml",
+  milliliters: "ml",
+
+  l: "liter",
+  liter: "liter",
+  liters: "liter",
+  litre: "liter",
+  litres: "liter"
 };
 
-function json(statusCode, body) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store"
-    },
-    body: JSON.stringify(body)
-  };
+
+function normalizeUnit(unit) {
+  const cleaned = cleanText(unit);
+
+  return UNIT_ALIASES[cleaned] || cleaned;
 }
 
-function parseRequest(text) {
-  const raw = (text || "").trim();
-  const lower = raw.toLowerCase();
 
-  let qty = 1;
-  let unit = "each";
+/*
+ * =====================================================
+ * UNIT TYPE
+ * =====================================================
+ */
 
-  const lbMatch = lower.match(
-    /(\d+(?:\.\d+)?)\s*(?:lb|lbs|pound|pounds)\b/
-  );
-
-  if (lbMatch) {
-    qty = Number(lbMatch[1]);
-    unit = "lb";
-  } else {
-    const leading = lower.match(/^\s*(\d+(?:\.\d+)?)\b/);
-    if (leading) qty = Number(leading[1]);
-  }
-
-  let canonical = null;
-  let krogerTerm = raw;
+function getUnitType(unit) {
+  const normalized = normalizeUnit(unit);
 
   if (
-    lower.includes("ground beef") &&
-    lower.includes("organic") &&
-    lower.includes("grass") &&
-    (lower.includes("85/15") || lower.includes("85 15"))
+    [
+      "oz",
+      "lb",
+      "g",
+      "kg"
+    ].includes(normalized)
   ) {
-    canonical = "ground-beef-organic-grassfed-85-15";
-    unit = "lb";
-    krogerTerm = "organic grass fed 85/15 ground beef";
-  } else if (
-    lower.includes("broccoli") &&
-    lower.includes("organic")
-  ) {
-    canonical = "organic-broccoli";
-    krogerTerm = "organic broccoli";
-  } else if (
-    lower.includes("cucumber") &&
-    lower.includes("organic")
-  ) {
-    canonical = "organic-cucumber";
-    krogerTerm = "organic cucumber";
-  } else if (
-    lower.includes("baby carrot") &&
-    lower.includes("organic")
-  ) {
-    canonical = "organic-baby-carrots";
-    unit = "lb";
-    krogerTerm = "organic baby carrots";
-  } else if (lower.includes("mango")) {
-    canonical = "mango";
-    krogerTerm = "mango";
+    return "weight";
   }
-
-  return {
-    raw,
-    qty,
-    unit,
-    canonical,
-    krogerTerm
-  };
-}
-
-function loadSeedData() {
-  const dataPath = path.join(
-    process.cwd(),
-    "data",
-    "seed-prices.json"
-  );
-
-  return JSON.parse(
-    fs.readFileSync(dataPath, "utf8")
-  );
-}
-
-async function getKrogerToken() {
-  const now = Date.now();
 
   if (
-    tokenCache.token &&
-    now < tokenCache.expiresAt
+    [
+      "fl_oz",
+      "pint",
+      "quart",
+      "gallon",
+      "ml",
+      "liter"
+    ].includes(normalized)
   ) {
-    return tokenCache.token;
+    return "liquid";
   }
 
-  const clientId =
-    process.env.KROGER_CLIENT_ID;
-
-  const clientSecret =
-    process.env.KROGER_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error(
-      "Kroger environment variables are missing in Netlify."
-    );
+  if (normalized === "each") {
+    return "count";
   }
 
-  const basic = Buffer.from(
-    `${clientId}:${clientSecret}`
-  ).toString("base64");
-
-  const response = await fetch(
-    `${KROGER_BASE}/connect/oauth2/token`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${basic}`,
-        "Content-Type":
-          "application/x-www-form-urlencoded",
-        Accept: "application/json"
-      },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        scope: "product.compact"
-      }).toString()
-    }
-  );
-
-  const text = await response.text();
-
-  if (!response.ok) {
-    throw new Error(
-      `Kroger OAuth failed (${response.status}): ${text.slice(
-        0,
-        300
-      )}`
-    );
-  }
-
-  const data = JSON.parse(text);
-
-  tokenCache.token = data.access_token;
-
-  tokenCache.expiresAt =
-    now +
-    Math.max(
-      60,
-      Number(data.expires_in || 1800) - 60
-    ) *
-      1000;
-
-  return tokenCache.token;
+  return "unknown";
 }
 
-async function krogerFetch(url) {
-  const token = await getKrogerToken();
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json"
-    }
-  });
+/*
+ * =====================================================
+ * WEIGHT CONVERSION
+ *
+ * All weight is normalized to ounces.
+ * =====================================================
+ */
 
-  const text = await response.text();
+function weightToOunces(quantity, unit) {
+  const qty = Number(quantity);
 
-  if (!response.ok) {
-    throw new Error(
-      `Kroger API failed (${response.status}): ${text.slice(
-        0,
-        300
-      )}`
-    );
+  if (!Number.isFinite(qty)) {
+    return null;
   }
 
-  return JSON.parse(text);
+  switch (normalizeUnit(unit)) {
+    case "oz":
+      return qty;
+
+    case "lb":
+      return qty * 16;
+
+    case "g":
+      return qty * 0.0352739619;
+
+    case "kg":
+      return qty * 35.2739619;
+
+    default:
+      return null;
+  }
 }
 
-async function findTargetKroger() {
-  const params = new URLSearchParams({
-    "filter.zipCode.near": TARGET_ZIP,
-    "filter.radiusInMiles": "10",
-    "filter.limit": "20",
-    "filter.chain": "Kroger"
-  });
 
-  const payload = await krogerFetch(
-    `${KROGER_BASE}/locations?${params.toString()}`
-  );
+/*
+ * =====================================================
+ * LIQUID CONVERSION
+ *
+ * All liquid is normalized to fluid ounces.
+ * =====================================================
+ */
 
-  const stores = payload.data || [];
+function liquidToFluidOunces(quantity, unit) {
+  const qty = Number(quantity);
 
-  if (!stores.length) {
-    throw new Error(
-      `No Kroger locations returned near ${TARGET_ZIP}.`
-    );
+  if (!Number.isFinite(qty)) {
+    return null;
   }
 
-  const exact = stores.find((store) => {
-    const address = [
-      store.address?.addressLine1,
-      store.address?.city,
-      store.address?.state,
-      store.address?.zipCode
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toUpperCase();
+  switch (normalizeUnit(unit)) {
+    case "fl_oz":
+      return qty;
 
-    return address.includes(TARGET_ADDRESS);
-  });
+    case "pint":
+      return qty * 16;
 
-  const cedarBluff = stores.find((store) => {
-    const text = `${store.name || ""} ${
-      store.address?.addressLine1 || ""
-    }`.toUpperCase();
+    case "quart":
+      return qty * 32;
 
-    return (
-      text.includes("CEDAR") ||
-      text.includes("KINGSTON")
-    );
-  });
+    case "gallon":
+      return qty * 128;
 
-  return exact || cedarBluff || stores[0];
+    case "ml":
+      return qty * 0.0338140227;
+
+    case "liter":
+      return qty * 33.8140227;
+
+    default:
+      return null;
+  }
 }
 
-function extractPrice(item) {
-  const price = item?.price || {};
 
-  const promo = Number(price.promo);
-  const regular = Number(price.regular);
+/*
+ * =====================================================
+ * NORMALIZED QUANTITY HELPER
+ * =====================================================
+ */
 
-  if (
-    Number.isFinite(promo) &&
-    promo > 0
-  ) {
+function normalizeQuantity(quantity, unit) {
+  const unitType = getUnitType(unit);
+
+  if (unitType === "weight") {
     return {
-      amount: promo,
-      type: "promo",
-      regular: regular || null
+      type: "weight",
+      normalizedQuantity: round(
+        weightToOunces(quantity, unit)
+      ),
+      normalizedUnit: "oz"
     };
   }
 
-  if (
-    Number.isFinite(regular) &&
-    regular > 0
-  ) {
+  if (unitType === "liquid") {
     return {
-      amount: regular,
-      type: "regular",
-      regular
+      type: "liquid",
+      normalizedQuantity: round(
+        liquidToFluidOunces(
+          quantity,
+          unit
+        )
+      ),
+      normalizedUnit: "fl_oz"
+    };
+  }
+
+  if (unitType === "count") {
+    return {
+      type: "count",
+      normalizedQuantity: round(
+        Number(quantity)
+      ),
+      normalizedUnit: "each"
     };
   }
 
   return null;
 }
 
-function productText(product, item) {
-  return [
-    product?.description,
-    product?.brand,
-    product?.categories?.join(" "),
-    item?.size
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
 
-function scoreProduct(
-  product,
-  item,
-  canonical
-) {
-  const text = productText(
-    product,
-    item
-  );
+/*
+ * =====================================================
+ * PACKAGE PARSER
+ *
+ * Supported examples:
+ *
+ * Weight:
+ * 16 oz
+ * 1 lb
+ * 3 LB BIG DEAL
+ * 3 x 1 lb
+ * 3 × 12 oz
+ *
+ * Liquid:
+ * 32 fl oz
+ * 1 quart
+ * 1 gallon
+ * 946 ml
+ * 1 liter
+ *
+ * Count:
+ * 4 ct
+ * 6 count
+ * =====================================================
+ */
 
-  let score = 0;
-
-  if (
-    canonical ===
-    "ground-beef-organic-grassfed-85-15"
-  ) {
-    if (text.includes("ground beef")) {
-      score += 8;
-    }
-
-    if (text.includes("organic")) {
-      score += 6;
-    }
-
-    if (text.includes("grass")) {
-      score += 5;
-    }
-
-    if (
-      text.includes("85/15") ||
-      text.includes("85 15") ||
-      text.includes("85%")
-    ) {
-      score += 7;
-    }
-
-    if (
-      text.includes("80/20") ||
-      text.includes("90/10")
-    ) {
-      score -= 8;
-    }
-  } else if (
-    canonical === "organic-broccoli"
-  ) {
-    if (text.includes("broccoli")) {
-      score += 8;
-    }
-
-    if (text.includes("organic")) {
-      score += 6;
-    }
-  } else if (
-    canonical === "organic-cucumber"
-  ) {
-    if (text.includes("cucumber")) {
-      score += 8;
-    }
-
-    if (text.includes("organic")) {
-      score += 6;
-    }
-  } else if (
-    canonical === "organic-baby-carrots"
-  ) {
-    if (text.includes("baby")) {
-      score += 4;
-    }
-
-    if (text.includes("carrot")) {
-      score += 8;
-    }
-
-    if (text.includes("organic")) {
-      score += 6;
-    }
-  } else if (
-    canonical === "mango"
-  ) {
-    if (text.includes("mango")) {
-      score += 8;
-    }
-  }
-
-  return score;
-}
-
-function inferPackageQty(
+function parsePackageSize(
   sizeText,
-  descriptionText,
-  requestedUnit
+  descriptionText = ""
 ) {
-  const size = String(
-    sizeText || ""
-  ).toLowerCase();
+  const size = cleanText(sizeText);
 
-  const description = String(
-    descriptionText || ""
-  ).toLowerCase();
+  const description =
+    cleanText(descriptionText);
 
   const combined =
-    `${description} ${size}`;
+    `${description} ${size}`.trim();
 
-  if (requestedUnit === "lb") {
 
-    /*
-     * FIRST:
-     * Look for explicit multi-pack wording:
-     *
-     * 3 x 1 lb
-     * 3 × 1 lb
-     */
-    let m = combined.match(
-      /(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:lb|lbs|pound|pounds)\b/
-    );
+  /*
+   * ===================================================
+   * MULTIPACK WEIGHT
+   *
+   * Examples:
+   * 3 x 1 lb
+   * 2 x 12 oz
+   * ===================================================
+   */
 
-    if (m) {
-      return (
-        Number(m[1]) *
-        Number(m[2])
+  let match = combined.match(
+    /\b(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(lb|lbs|pound|pounds|oz|ounce|ounces|kg|kilogram|kilograms|g|gram|grams)\b/
+  );
+
+  if (match) {
+    const packageCount =
+      Number(match[1]);
+
+    const eachQuantity =
+      Number(match[2]);
+
+    const unit =
+      normalizeUnit(match[3]);
+
+    const totalQuantity =
+      packageCount *
+      eachQuantity;
+
+    const normalized =
+      normalizeQuantity(
+        totalQuantity,
+        unit
       );
-    }
 
-    /*
-     * SECOND:
-     * Kroger sometimes puts the total
-     * package weight in the product
-     * description rather than item.size.
-     *
-     * Example:
-     *
-     * "Simple Truth Organic 85/15
-     * Grass Fed Ground Beef Packs
-     * 3 LB BIG DEAL!"
-     *
-     * This should be interpreted as
-     * ONE package supplying 3 lb.
-     */
-    m = description.match(
-      /\b(\d+(?:\.\d+)?)\s*(?:lb|lbs|pound|pounds)\b/
-    );
+    if (normalized) {
+      return {
+        type:
+          normalized.type,
 
-    if (m) {
-      return Number(m[1]);
-    }
+        packageCount,
 
-    /*
-     * THIRD:
-     * Fall back to Kroger's item.size.
-     */
-    m = size.match(
-      /(\d+(?:\.\d+)?)\s*(?:lb|lbs|pound|pounds)\b/
-    );
+        quantity:
+          totalQuantity,
 
-    if (m) {
-      return Number(m[1]);
-    }
+        unit,
 
-    /*
-     * FOURTH:
-     * Convert ounces to pounds.
-     */
-    m = size.match(
-      /(\d+(?:\.\d+)?)\s*oz\b/
-    );
+        eachQuantity,
 
-    if (m) {
-      return Number(m[1]) / 16;
+        normalizedQuantity:
+          normalized
+            .normalizedQuantity,
+
+        normalizedUnit:
+          normalized
+            .normalizedUnit,
+
+        source:
+          "multipack-weight"
+      };
     }
   }
 
-  return 1;
-}
 
-async function searchLiveKroger(
-  parsed,
-  productSeed
-) {
-  const store =
-    await findTargetKroger();
+  /*
+   * ===================================================
+   * MULTIPACK LIQUID
+   *
+   * Examples:
+   * 6 x 12 fl oz
+   * 4 x 16.9 fl oz
+   * ===================================================
+   */
 
-  const params = new URLSearchParams({
-    "filter.term": parsed.krogerTerm,
-    "filter.locationId":
-      store.locationId,
-    "filter.limit": "20"
-  });
-
-  const payload = await krogerFetch(
-    `${KROGER_BASE}/products?${params.toString()}`
+  match = combined.match(
+    /\b(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(fl\.?\s*oz\.?|floz|fluid ounces?|pints?|pts?|quarts?|qts?|gallons?|gals?|ml|milliliters?|liters?|litres?)\b/
   );
 
-  const products = payload.data || [];
-  const candidates = [];
+  if (match) {
+    const packageCount =
+      Number(match[1]);
 
-  for (const product of products) {
-    const items = Array.isArray(
-      product.items
-    )
-      ? product.items
-      : [];
+    const eachQuantity =
+      Number(match[2]);
 
-    for (const item of items) {
-      const priceInfo =
-        extractPrice(item);
+    const unit =
+      normalizeUnit(match[3]);
 
-      if (!priceInfo) {
-        continue;
-      }
+    const totalQuantity =
+      packageCount *
+      eachQuantity;
 
-      const score = scoreProduct(
-        product,
-        item,
-        parsed.canonical
+    const normalized =
+      normalizeQuantity(
+        totalQuantity,
+        unit
       );
 
-      if (score <= 0) {
-        continue;
-      }
+    if (normalized) {
+      return {
+        type:
+          normalized.type,
 
-      candidates.push({
-        retailer: "Kroger",
+        packageCount,
 
-        product:
-          product.description ||
-          "Kroger product",
+        quantity:
+          totalQuantity,
 
-        brand:
-          product.brand || null,
+        unit,
 
-        productId:
-          product.productId ||
-          product.upc ||
-          null,
+        eachQuantity,
 
-        /*
-         * IMPORTANT NORMALIZATION FIX:
-         *
-         * We now pass BOTH item.size
-         * and product.description.
-         *
-         * This allows a Kroger product
-         * described as "3 LB BIG DEAL!"
-         * to be recognized as a
-         * three-pound package.
-         */
-        package_qty:
-          inferPackageQty(
-            item.size,
-            product.description,
-            productSeed.unit
-          ),
+        normalizedQuantity:
+          normalized
+            .normalizedQuantity,
 
-        package_unit:
-          productSeed.unit,
+        normalizedUnit:
+          normalized
+            .normalizedUnit,
 
-        size:
-          item.size || null,
-
-        price:
-          priceInfo.amount,
-
-        regularPrice:
-          priceInfo.regular,
-
-        priceType:
-          priceInfo.type,
-
-        match:
-          score >= 18
-            ? "exact"
-            : score >= 10
-            ? "strong"
-            : "possible",
-
-        score,
-
-        source_type:
-          "kroger-live-api",
-
-        locationId:
-          store.locationId,
-
-        locationName:
-          store.name || "Kroger",
-
-        address:
-          store.address || null,
-
-        aisleLocations:
-          item.aisleLocations || []
-      });
+        source:
+          "multipack-liquid"
+      };
     }
   }
 
-  candidates.sort(
-    (a, b) =>
-      b.score - a.score ||
-      a.price - b.price
+
+  /*
+   * ===================================================
+   * DESCRIPTION WEIGHT
+   *
+   * Description is checked before the retailer size field.
+   *
+   * This protects against retailer metadata like:
+   *
+   * Description:
+   * "3 LB BIG DEAL"
+   *
+   * Size:
+   * "1 lb"
+   * ===================================================
+   */
+
+  match = description.match(
+    /\b(\d+(?:\.\d+)?)\s*(lb|lbs|pound|pounds|oz|ounce|ounces|kg|kilogram|kilograms|g|gram|grams)\b/
   );
 
-  const bestScore =
-    candidates[0]?.score ?? 0;
+  if (match) {
+    const quantity =
+      Number(match[1]);
+
+    const unit =
+      normalizeUnit(match[2]);
+
+    const normalized =
+      normalizeQuantity(
+        quantity,
+        unit
+      );
+
+    if (normalized) {
+      return {
+        type:
+          normalized.type,
+
+        packageCount: 1,
+
+        quantity,
+
+        unit,
+
+        normalizedQuantity:
+          normalized
+            .normalizedQuantity,
+
+        normalizedUnit:
+          normalized
+            .normalizedUnit,
+
+        source:
+          "description-weight"
+      };
+    }
+  }
+
+
+  /*
+   * ===================================================
+   * SIZE FIELD WEIGHT
+   * ===================================================
+   */
+
+  match = size.match(
+    /\b(\d+(?:\.\d+)?)\s*(lb|lbs|pound|pounds|oz|ounce|ounces|kg|kilogram|kilograms|g|gram|grams)\b/
+  );
+
+  if (match) {
+    const quantity =
+      Number(match[1]);
+
+    const unit =
+      normalizeUnit(match[2]);
+
+    const normalized =
+      normalizeQuantity(
+        quantity,
+        unit
+      );
+
+    if (normalized) {
+      return {
+        type:
+          normalized.type,
+
+        packageCount: 1,
+
+        quantity,
+
+        unit,
+
+        normalizedQuantity:
+          normalized
+            .normalizedQuantity,
+
+        normalizedUnit:
+          normalized
+            .normalizedUnit,
+
+        source:
+          "size-weight"
+      };
+    }
+  }
+
+
+  /*
+   * ===================================================
+   * DESCRIPTION LIQUID
+   * ===================================================
+   */
+
+  match = description.match(
+    /\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz\.?|floz|fluid ounces?|pints?|pts?|quarts?|qts?|gallons?|gals?|ml|milliliters?|liters?|litres?)\b/
+  );
+
+  if (match) {
+    const quantity =
+      Number(match[1]);
+
+    const unit =
+      normalizeUnit(match[2]);
+
+    const normalized =
+      normalizeQuantity(
+        quantity,
+        unit
+      );
+
+    if (normalized) {
+      return {
+        type:
+          normalized.type,
+
+        packageCount: 1,
+
+        quantity,
+
+        unit,
+
+        normalizedQuantity:
+          normalized
+            .normalizedQuantity,
+
+        normalizedUnit:
+          normalized
+            .normalizedUnit,
+
+        source:
+          "description-liquid"
+      };
+    }
+  }
+
+
+  /*
+   * ===================================================
+   * SIZE FIELD LIQUID
+   * ===================================================
+   */
+
+  match = size.match(
+    /\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz\.?|floz|fluid ounces?|pints?|pts?|quarts?|qts?|gallons?|gals?|ml|milliliters?|liters?|litres?)\b/
+  );
+
+  if (match) {
+    const quantity =
+      Number(match[1]);
+
+    const unit =
+      normalizeUnit(match[2]);
+
+    const normalized =
+      normalizeQuantity(
+        quantity,
+        unit
+      );
+
+    if (normalized) {
+      return {
+        type:
+          normalized.type,
+
+        packageCount: 1,
+
+        quantity,
+
+        unit,
+
+        normalizedQuantity:
+          normalized
+            .normalizedQuantity,
+
+        normalizedUnit:
+          normalized
+            .normalizedUnit,
+
+        source:
+          "size-liquid"
+      };
+    }
+  }
+
+
+  /*
+   * ===================================================
+   * COUNT
+   *
+   * Examples:
+   * 4 ct
+   * 6 count
+   * 12 pieces
+   * ===================================================
+   */
+
+  match = combined.match(
+    /\b(\d+)\s*(ct|count|counts|piece|pieces|item|items)\b/
+  );
+
+  if (match) {
+    const quantity =
+      Number(match[1]);
+
+    return {
+      type: "count",
+
+      packageCount: 1,
+
+      quantity,
+
+      unit: "each",
+
+      normalizedQuantity:
+        quantity,
+
+      normalizedUnit:
+        "each",
+
+      source:
+        "count"
+    };
+  }
+
+
+  /*
+   * ===================================================
+   * NO RELIABLE PACKAGE SIZE
+   *
+   * We deliberately do not invent weight or volume.
+   *
+   * This is treated as one purchasable unit.
+   * ===================================================
+   */
 
   return {
-    store,
+    type: "count",
 
-    offers: candidates
-      .filter(
-        (candidate) =>
-          candidate.score >=
-          Math.max(
-            8,
-            bestScore - 5
-          )
-      )
-      .slice(0, 8)
+    packageCount: 1,
+
+    quantity: 1,
+
+    unit: "each",
+
+    normalizedQuantity: 1,
+
+    normalizedUnit:
+      "each",
+
+    source:
+      "inferred-single-package"
   };
 }
 
-function bestPackageCombo(
-  offers,
-  requestedQty
-) {
-  if (!offers.length) {
-    return null;
-  }
 
-  const maxPackage = Math.max(
-    ...offers.map((offer) =>
-      Number(
-        offer.package_qty || 1
-      )
-    )
-  );
+/*
+ * =====================================================
+ * USER REQUEST NORMALIZATION
+ *
+ * Example:
+ *
+ * Shopper:
+ * 2 lb organic broccoli
+ *
+ * Internal:
+ * 32 oz organic broccoli
+ * =====================================================
+ */
 
-  const scale = 100;
-
-  const target = Math.ceil(
-    requestedQty * scale
-  );
-
-  const max = Math.ceil(
-    (
-      requestedQty +
-      maxPackage * 3 +
-      5
-    ) * scale
-  );
-
-  const dp =
-    Array(max + 1).fill(null);
-
-  dp[0] = {
-    cost: 0,
-    picks: []
-  };
-
-  for (
-    let i = 0;
-    i <= max;
-    i++
-  ) {
-    if (!dp[i]) {
-      continue;
-    }
-
-    for (const offer of offers) {
-      const step = Math.max(
-        1,
-        Math.round(
-          Number(
-            offer.package_qty || 1
-          ) * scale
-        )
-      );
-
-      const nextIndex =
-        i + step;
-
-      if (nextIndex > max) {
-        continue;
-      }
-
-      const nextCost =
-        dp[i].cost +
-        Number(offer.price);
-
-      if (
-        !dp[nextIndex] ||
-        nextCost <
-          dp[nextIndex].cost
-      ) {
-        dp[nextIndex] = {
-          cost: nextCost,
-
-          picks: [
-            ...dp[i].picks,
-            offer
-          ]
-        };
-      }
-    }
-  }
-
-  let best = null;
-
-  for (
-    let i = target;
-    i <= max;
-    i++
-  ) {
-    if (!dp[i]) {
-      continue;
-    }
-
-    const candidate = {
-      totalQty:
-        i / scale,
-
-      cost:
-        dp[i].cost,
-
-      picks:
-        dp[i].picks
-    };
-
-    if (
-      !best ||
-      candidate.cost <
-        best.cost ||
-      (
-        candidate.cost ===
-          best.cost &&
-        candidate.totalQty <
-          best.totalQty
-      )
-    ) {
-      best = candidate;
-    }
-  }
-
-  return best;
-}
-
-function buildRetailerResult(
-  retailer,
-  offers,
-  requestedQty,
+function normalizeRequest({
+  quantity,
   unit,
-  dataMode
-) {
-  const best =
-    bestPackageCombo(
-      offers,
-      requestedQty
+  description,
+  canonicalId = null,
+  attributes = {}
+}) {
+  const requestedUnit =
+    normalizeUnit(unit);
+
+  const unitType =
+    getUnitType(
+      requestedUnit
     );
 
-  if (!best) {
+
+  const normalized =
+    normalizeQuantity(
+      quantity,
+      requestedUnit
+    );
+
+
+  if (!normalized) {
+    return {
+      canonicalId,
+
+      description:
+        description || "",
+
+      requestedQuantity:
+        Number(quantity),
+
+      requestedUnit,
+
+      unitType:
+        "unknown",
+
+      normalizedQuantity:
+        Number(quantity),
+
+      normalizedUnit:
+        requestedUnit,
+
+      attributes
+    };
+  }
+
+
+  return {
+    canonicalId,
+
+    description:
+      description || "",
+
+    requestedQuantity:
+      Number(quantity),
+
+    requestedUnit,
+
+    unitType:
+      normalized.type,
+
+    normalizedQuantity:
+      normalized
+        .normalizedQuantity,
+
+    normalizedUnit:
+      normalized
+        .normalizedUnit,
+
+    attributes
+  };
+}
+
+
+/*
+ * =====================================================
+ * PRODUCT ATTRIBUTE DETECTION
+ * =====================================================
+ */
+
+function detectAttributes(text) {
+  const value =
+    cleanText(text);
+
+  return {
+    organic:
+      /\borganic\b/.test(
+        value
+      ),
+
+    grassFed:
+      /\bgrass[\s-]?fed\b/.test(
+        value
+      ),
+
+    frozen:
+      /\bfrozen\b/.test(
+        value
+      ),
+
+    fresh:
+      /\bfresh\b/.test(
+        value
+      ),
+
+    wholeBean:
+      /\bwhole[\s-]?bean\b/.test(
+        value
+      ),
+
+    ground:
+      /\bground\b/.test(
+        value
+      ),
+
+    lean8515:
+      /\b85\s*[/\-]\s*15\b|\b85%\b/.test(
+        value
+      ),
+
+    lean9010:
+      /\b90\s*[/\-]\s*10\b|\b90%\b/.test(
+        value
+      ),
+
+    lean9317:
+      /\b93\s*[/\-]\s*7\b|\b93%\b/.test(
+        value
+      )
+  };
+}
+
+
+/*
+ * =====================================================
+ * PRODUCT MATCH SCORE
+ *
+ * Match score answers:
+ *
+ * "How closely does this product match the shopper request?"
+ *
+ * This is separate from source confidence.
+ * =====================================================
+ */
+
+function scoreProductMatch(
+  request,
+  offer
+) {
+  let score = 50;
+
+  const requestedText =
+    cleanText(
+      request?.description
+    );
+
+  const offerText =
+    cleanText(
+      [
+        offer?.title,
+        offer?.brand,
+        offer?.description
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+
+
+  const requestedAttributes =
+    request &&
+    request.attributes &&
+    Object.keys(
+      request.attributes
+    ).length
+
+      ? request.attributes
+
+      : detectAttributes(
+          requestedText
+        );
+
+
+  const offerAttributes =
+    offer?.attributes ||
+    detectAttributes(
+      offerText
+    );
+
+
+  /*
+   * ===================================================
+   * REQUIRED ATTRIBUTES
+   * ===================================================
+   */
+
+  if (
+    requestedAttributes.organic
+  ) {
+    score +=
+      offerAttributes.organic
+        ? 15
+        : -35;
+  }
+
+
+  if (
+    requestedAttributes.grassFed
+  ) {
+    score +=
+      offerAttributes.grassFed
+        ? 10
+        : -25;
+  }
+
+
+  if (
+    requestedAttributes.lean8515
+  ) {
+    score +=
+      offerAttributes.lean8515
+        ? 10
+        : -25;
+  }
+
+
+  if (
+    requestedAttributes.lean9010
+  ) {
+    score +=
+      offerAttributes.lean9010
+        ? 10
+        : -25;
+  }
+
+
+  if (
+    requestedAttributes.lean9317
+  ) {
+    score +=
+      offerAttributes.lean9317
+        ? 10
+        : -25;
+  }
+
+
+  if (
+    requestedAttributes.wholeBean
+  ) {
+    score +=
+      offerAttributes.wholeBean
+        ? 10
+        : -25;
+  }
+
+
+  if (
+    requestedAttributes.ground &&
+    !offerAttributes.ground
+  ) {
+    score -= 15;
+  }
+
+
+  if (
+    requestedAttributes.frozen &&
+    !offerAttributes.frozen
+  ) {
+    score -= 20;
+  }
+
+
+  if (
+    requestedAttributes.fresh &&
+    offerAttributes.frozen
+  ) {
+    score -= 25;
+  }
+
+
+  /*
+   * ===================================================
+   * WORD OVERLAP
+   * ===================================================
+   */
+
+  const stopWords =
+    new Set([
+      "the",
+      "and",
+      "with",
+      "for",
+      "from",
+      "into",
+      "of",
+      "a",
+      "an",
+      "organic",
+      "fresh",
+      "frozen",
+      "grass",
+      "fed",
+      "each",
+      "count",
+      "ct",
+      "lb",
+      "lbs",
+      "oz"
+    ]);
+
+
+  const words = [
+    ...new Set(
+      requestedText
+        .split(/\W+/)
+        .filter(
+          word =>
+            word.length >= 3 &&
+            !stopWords.has(word)
+        )
+    )
+  ];
+
+
+  if (words.length) {
+    const hits =
+      words.filter(
+        word =>
+          offerText.includes(
+            word
+          )
+      ).length;
+
+
+    score +=
+      (
+        hits /
+        words.length
+      ) * 20;
+  }
+
+
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(score)
+    )
+  );
+}
+
+
+/*
+ * =====================================================
+ * NORMALIZE RETAILER OFFER
+ * =====================================================
+ */
+
+function normalizeOffer({
+  retailer,
+  title,
+  brand = null,
+  description = "",
+  size = "",
+  price,
+  location = null,
+  source = {},
+  attributes = null,
+  productId = null
+}) {
+  const numericPrice =
+    Number(price);
+
+
+  if (
+    !Number.isFinite(
+      numericPrice
+    ) ||
+    numericPrice <= 0
+  ) {
     return null;
   }
+
+
+  const packageInfo =
+    parsePackageSize(
+      size,
+      description || title
+    );
+
+
+  const detectedAttributes =
+    attributes ||
+    detectAttributes(
+      [
+        title,
+        description,
+        brand
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+
+
+  const normalizedPackageQty =
+    Number(
+      packageInfo
+        .normalizedQuantity
+    );
+
+
+  const unitPrice =
+    Number.isFinite(
+      normalizedPackageQty
+    ) &&
+    normalizedPackageQty > 0
+
+      ? numericPrice /
+        normalizedPackageQty
+
+      : null;
+
 
   return {
     retailer,
 
-    requestedQty,
+    title,
 
-    requestedUnit:
-      unit,
+    brand,
 
-    totalQty: Number(
-      best.totalQty.toFixed(2)
-    ),
+    description,
 
-    estimatedCost: Number(
-      best.cost.toFixed(2)
-    ),
+    productId,
 
-    match:
-      best.picks.every(
-        (pick) =>
-          pick.match === "exact"
-      )
-        ? "exact"
-        : best.picks.some(
-            (pick) =>
-              pick.match ===
-              "possible"
-          )
-        ? "possible"
-        : "estimated",
+    package:
+      packageInfo,
 
-    dataMode,
+    price: {
+      total:
+        round(
+          numericPrice,
+          2
+        ),
 
-    packages:
-      best.picks.map(
-        (pick) => ({
-          product:
-            pick.product,
-
-          brand:
-            pick.brand || null,
-
-          packageQty:
-            Number(
-              pick.package_qty || 1
+      perNormalizedUnit:
+        unitPrice === null
+          ? null
+          : round(
+              unitPrice,
+              6
             ),
 
-          packageUnit:
-            pick.package_unit,
+      normalizedUnit:
+        packageInfo
+          .normalizedUnit,
 
-          size:
-            pick.size || null,
+      perPound:
+        packageInfo.type ===
+          "weight" &&
+        unitPrice !== null
 
-          price:
-            Number(
-              pick.price
-            ),
+          ? round(
+              unitPrice * 16,
+              4
+            )
 
-          regularPrice:
-            pick.regularPrice ||
-            null,
+          : null,
 
-          priceType:
-            pick.priceType ||
-            null,
+      perFluidOunce:
+        packageInfo.type ===
+          "liquid" &&
+        unitPrice !== null
 
-          sourceType:
-            pick.source_type,
+          ? round(
+              unitPrice,
+              6
+            )
 
-          productId:
-            pick.productId ||
-            null
-        })
+          : null
+    },
+
+    attributes:
+      detectedAttributes,
+
+    location,
+
+    source
+  };
+}
+
+
+/*
+ * =====================================================
+ * PACKAGE REQUIREMENT
+ *
+ * This calculates how many packages must actually
+ * be purchased.
+ *
+ * Example:
+ *
+ * Shopper wants:
+ * 16 oz
+ *
+ * Retailer package:
+ * 12 oz
+ *
+ * Shopper must buy:
+ * 2 packages = 24 oz
+ * =====================================================
+ */
+
+function calculatePackageRequirement(
+  request,
+  offer
+) {
+  if (
+    !request ||
+    !offer ||
+    !offer.package
+  ) {
+    return null;
+  }
+
+
+  /*
+   * Never compare unlike measurement types.
+   *
+   * Examples rejected:
+   *
+   * 1 lb request
+   * vs
+   * 1 each retailer package
+   *
+   * We do not invent a weight.
+   */
+
+  if (
+    request.normalizedUnit !==
+    offer.package
+      .normalizedUnit
+  ) {
+    return null;
+  }
+
+
+  const requested =
+    Number(
+      request
+        .normalizedQuantity
+    );
+
+
+  const packageQuantity =
+    Number(
+      offer.package
+        .normalizedQuantity
+    );
+
+
+  if (
+    !Number.isFinite(
+      requested
+    ) ||
+    requested <= 0 ||
+    !Number.isFinite(
+      packageQuantity
+    ) ||
+    packageQuantity <= 0
+  ) {
+    return null;
+  }
+
+
+  const packagesNeeded =
+    Math.ceil(
+      requested /
+      packageQuantity
+    );
+
+
+  const suppliedQuantity =
+    packagesNeeded *
+    packageQuantity;
+
+
+  const excessQuantity =
+    suppliedQuantity -
+    requested;
+
+
+  const totalCost =
+    packagesNeeded *
+    offer.price.total;
+
+
+  return {
+    packagesNeeded,
+
+    requestedQuantity:
+      round(requested),
+
+    suppliedQuantity:
+      round(
+        suppliedQuantity
+      ),
+
+    normalizedUnit:
+      request.normalizedUnit,
+
+    excessQuantity:
+      round(
+        excessQuantity
+      ),
+
+    fulfillmentRatio:
+      round(
+        suppliedQuantity /
+        requested,
+        4
+      ),
+
+    totalCost:
+      round(
+        totalCost,
+        2
       )
   };
 }
 
-exports.handler =
-  async function (event) {
-    try {
-      const text =
-        event
-          .queryStringParameters
-          ?.q || "";
 
-      const parsed =
-        parseRequest(text);
+/*
+ * =====================================================
+ * EXPORTS
+ * =====================================================
+ */
 
-      if (!parsed.canonical) {
-        return json(200, {
-          ok: false,
-
-          parsed,
-
-          message:
-            "Prototype currently recognizes: organic grass-fed 85/15 ground beef, organic broccoli, organic cucumber, organic baby carrots, and mango."
-        });
-      }
-
-      const seed =
-        loadSeedData();
-
-      const product =
-        seed.products.find(
-          (product) =>
-            product.canonical_id ===
-            parsed.canonical
-        );
-
-      if (!product) {
-        return json(200, {
-          ok: false,
-
-          message:
-            "The requested product is not currently configured in the prototype seed data."
-        });
-      }
-
-      const results = [];
-
-      let krogerStatus = {
-        live: false,
-
-        message:
-          "Kroger live connector was not attempted."
-      };
-
-      /*
-       * =========================
-       * LIVE KROGER CONNECTOR
-       * =========================
-       */
-      try {
-        const live =
-          await searchLiveKroger(
-            parsed,
-            product
-          );
-
-        if (
-          live.offers.length
-        ) {
-          const result =
-            buildRetailerResult(
-              "Kroger",
-              live.offers,
-              parsed.qty,
-              product.unit,
-              "live"
-            );
-
-          if (result) {
-            result.location = {
-              locationId:
-                live.store
-                  .locationId,
-
-              name:
-                live.store.name ||
-                "Kroger",
-
-              address:
-                live.store
-                  .address ||
-                null
-            };
-
-            results.push(
-              result
-            );
-
-            krogerStatus = {
-              live: true,
-
-              message:
-                `Live Kroger API connected to ${
-                  live.store.name ||
-                  "Kroger"
-                }.`,
-
-              locationId:
-                live.store
-                  .locationId,
-
-              address:
-                live.store
-                  .address ||
-                null,
-
-              candidateCount:
-                live.offers
-                  .length
-            };
-          }
-        } else {
-          krogerStatus = {
-            live: true,
-
-            message:
-              "Kroger API connected, but no sufficiently relevant priced product was returned."
-          };
-        }
-      } catch (error) {
-        krogerStatus = {
-          live: false,
-
-          message:
-            error.message
-        };
-      }
-
-      /*
-       * =========================
-       * PROTOTYPE SEED DATA
-       * ALDI / SPROUTS /
-       * EARTH FARE
-       * =========================
-       */
-      const grouped = {};
-
-      for (
-        const offer of
-        product.offers
-      ) {
-        /*
-         * Never use Kroger seed
-         * data anymore.
-         *
-         * Kroger must come from
-         * the live API.
-         */
-        if (
-          offer.retailer ===
-          "Kroger"
-        ) {
-          continue;
-        }
-
-        if (
-          offer.package_unit !==
-          product.unit
-        ) {
-          continue;
-        }
-
-        grouped[
-          offer.retailer
-        ] ??= [];
-
-        grouped[
-          offer.retailer
-        ].push(offer);
-      }
-
-      for (
-        const [
-          retailer,
-          offers
-        ] of Object.entries(
-          grouped
-        )
-      ) {
-        const result =
-          buildRetailerResult(
-            retailer,
-            offers,
-            parsed.qty,
-            product.unit,
-            "prototype-seed"
-          );
-
-        if (result) {
-          results.push(
-            result
-          );
-        }
-      }
-
-      /*
-       * Cheapest retailer first.
-       */
-      results.sort(
-        (a, b) =>
-          a.estimatedCost -
-          b.estimatedCost
-      );
-
-      return json(200, {
-        ok: true,
-
-        parsed,
-
-        product:
-          product.name,
-
-        market:
-          "Knoxville, TN",
-
-        disclaimer:
-          "Kroger uses live API data when available. Other retailers are still prototype seed data and should not be relied on as current shelf prices.",
-
-        connectors: {
-          kroger:
-            krogerStatus,
-
-          aldi: {
-            live: false,
-            mode:
-              "prototype-seed"
-          },
-
-          sprouts: {
-            live: false,
-            mode:
-              "prototype-seed"
-          },
-
-          earthFare: {
-            live: false,
-            mode:
-              "prototype-seed"
-          }
-        },
-
-        results,
-
-        winner:
-          results[0] ||
-          null
-      });
-    } catch (error) {
-      return json(500, {
-        ok: false,
-
-        error:
-          error.message
-      });
-    }
-  };
+module.exports = {
+  cleanText,
+  round,
+  normalizeUnit,
+  getUnitType,
+  weightToOunces,
+  liquidToFluidOunces,
+  normalizeQuantity,
+  parsePackageSize,
+  normalizeRequest,
+  detectAttributes,
+  scoreProductMatch,
+  normalizeOffer,
+  calculatePackageRequirement
+};
