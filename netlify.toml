@@ -4,12 +4,14 @@
 
 [functions]
   node_bundler = "esbuild"
+
   included_files = [
     "data/seed-prices.json",
     "data/seedPrices.json",
     "data/sprouts-evidence.json",
     "data/aldi-evidence.json",
-    "data/earthfare-evidence.json"
+    "data/earthfare-evidence.json",
+    "public/products.json"
   ]
 
 [[redirects]]
